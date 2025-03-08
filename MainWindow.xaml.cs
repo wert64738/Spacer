@@ -122,7 +122,7 @@ namespace Spacer
             }
         }
 
-        class FolderNode
+        class FolderNode 
         {
             public string Path { get; set; }
             public List<(string Path, long Size)> Files { get; set; } = new List<(string, long)>();

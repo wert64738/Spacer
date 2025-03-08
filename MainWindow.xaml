@@ -15,6 +15,6 @@
             <TextBox x:Name="RootFolderTextBox" Width="400" Margin="0,0,5,0" IsReadOnly="True" />
             <Button Content="Scan Folder" Click="ScanFolderButton_Click" />
         </StackPanel>
-        <Canvas x:Name="MainCanvas" Grid.Row="1" Background="White" Margin="5" />
+        <Canvas x:Name="MainCanvas" Grid.Row="1" Background="White" Margin="5" /> 
     </Grid>
 </Window>
