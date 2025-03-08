@@ -79,136 +79,128 @@ namespace Spacer
 
             return node;
         }
-        private void RenderFolderMap(FolderNode node, Canvas canvas, double x, double y, double width, double height, bool verticalSplit = true)
+        private void RenderFolderMap(FolderNode node, Canvas canvas, double x, double y, double width, double height)
         {
+            const double gap = 3;
             if (node == null || width <= 0 || height <= 0)
                 return;
 
-            // Use a constant gap for both container spacing and folder content buffer.
-            const double containerGap = 3;
-
-            var items = node.SubFolders
-                            .Select(f => new { f.Path, Size = f.TotalSize, IsFolder = true, Folder = f })
-                            .Concat(node.Files.Select(f => new { f.Path, Size = f.Size, IsFolder = false, Folder = (FolderNode)null }))
-                            .OrderByDescending(item => item.Size)
-                            .ToList();
-
+            // Collect child items.
+            List<ChildItem> items = new List<ChildItem>();
+            foreach (var folder in node.SubFolders)
+            {
+                items.Add(new ChildItem { Path = folder.Path, Size = folder.TotalSize, IsFolder = true, Folder = folder });
+            }
+            foreach (var file in node.Files)
+            {
+                items.Add(new ChildItem { Path = file.Path, Size = file.Size, IsFolder = false, Folder = null });
+            }
             if (items.Count == 0)
                 return;
 
-            double totalChildSize = items.Sum(item => item.Size);
+            // Sort by size (largest first) and compute total.
+            items.Sort((a, b) => b.Size.CompareTo(a.Size));
+            double totalSize = items.Sum(item => item.Size);
 
-            // Total gap space between items: (number of gaps) = (items.Count - 1) * containerGap.
-            double totalGap = (items.Count - 1) * containerGap;
-            double availableMain = verticalSplit ? width - totalGap : height - totalGap;
-            if (availableMain < 0)
-                availableMain = 0;
+            // Reserve a 3-pixel buffer along the folder’s border.
+            Rect innerArea = new Rect(x + gap, y + gap, Math.Max(0, width - 2 * gap), Math.Max(0, height - 2 * gap));
 
-            double currentMainOffset = 0;
-            double rollUpAccum = 0;
-            double rollUpChildSize = 0;
+            // Recursively assign rectangles to items.
+            DivideDisplayArea(items, 0, items.Count, innerArea, totalSize, gap);
 
+            // Render each child.
             foreach (var item in items)
             {
-                double allocatedMain = (item.Size / totalChildSize) * availableMain;
+                if (item.Rect.Width <= 0 || item.Rect.Height <= 0)
+                    continue;
 
-                // "Roll up" items that would get less than 3 pixels.
-                if (allocatedMain < 3)
+                var rect = new Rectangle
                 {
-                    rollUpAccum += allocatedMain;
-                    rollUpChildSize += item.Size;
-                }
-                else
+                    Width = item.Rect.Width,
+                    Height = item.Rect.Height,
+                    Fill = item.IsFolder ? Brushes.LightGreen : Brushes.LightBlue,
+                    Stroke = Brushes.Black,
+                    ToolTip = item.Path
+                };
+                canvas.Children.Add(rect);
+                Canvas.SetLeft(rect, item.Rect.X);
+                Canvas.SetTop(rect, item.Rect.Y);
+
+                // Recurse for folders, adding an inset so the folder border is visible.
+                if (item.IsFolder)
                 {
-                    // Flush any accumulated roll-up items.
-                    if (rollUpAccum > 0)
-                    {
-                        DrawRolledUpRect(canvas, x, y, verticalSplit, ref currentMainOffset, rollUpAccum, width, height, rollUpChildSize, containerGap);
-                        rollUpAccum = 0;
-                        rollUpChildSize = 0;
-                    }
-
-                    double itemX, itemY, itemWidth, itemHeight;
-                    if (verticalSplit)
-                    {
-                        itemX = x + currentMainOffset;
-                        itemY = y;
-                        itemWidth = allocatedMain;
-                        itemHeight = height;
-                    }
-                    else
-                    {
-                        itemX = x;
-                        itemY = y + currentMainOffset;
-                        itemWidth = width;
-                        itemHeight = allocatedMain;
-                    }
-
-                    var rect = new Rectangle
-                    {
-                        Width = itemWidth,
-                        Height = itemHeight,
-                        Fill = item.IsFolder ? Brushes.LightGreen : Brushes.LightBlue,
-                        Stroke = Brushes.Black,
-                        ToolTip = item.Path
-                    };
-                    canvas.Children.Add(rect);
-                    Canvas.SetLeft(rect, itemX);
-                    Canvas.SetTop(rect, itemY);
-
-                    // For folders, inset the recursive layout by containerGap on all sides.
-                    if (item.IsFolder)
-                    {
-                        RenderFolderMap(item.Folder, canvas,
-                                        itemX + containerGap, itemY + containerGap,
-                                        Math.Max(0, itemWidth - 2 * containerGap), Math.Max(0, itemHeight - 2 * containerGap),
-                                        !verticalSplit);
-                    }
-
-                    currentMainOffset += allocatedMain;
-                    if (item != items.Last())
-                        currentMainOffset += containerGap;
+                    RenderFolderMap(item.Folder, canvas,
+                        item.Rect.X + gap, item.Rect.Y + gap,
+                        Math.Max(0, item.Rect.Width - 2 * gap), Math.Max(0, item.Rect.Height - 2 * gap));
                 }
-            }
-
-            // Flush any remaining rolled-up items.
-            if (rollUpAccum > 0)
-            {
-                DrawRolledUpRect(canvas, x, y, verticalSplit, ref currentMainOffset, rollUpAccum, width, height, rollUpChildSize, containerGap);
             }
         }
 
-        private void DrawRolledUpRect(Canvas canvas, double x, double y, bool verticalSplit, ref double currentMainOffset,
-                                      double allocatedMain, double totalWidth, double totalHeight, double totalRolledUpSize, double gap)
+        private void DivideDisplayArea(List<ChildItem> items, int start, int count, Rect area, double totalSize, double gap)
         {
-            double itemX, itemY, itemWidth, itemHeight;
-            if (verticalSplit)
+            // Ensure safe dimensions.
+            double safeWidth = Math.Max(0, area.Width);
+            double safeHeight = Math.Max(0, area.Height);
+            area = new Rect(area.X, area.Y, safeWidth, safeHeight);
+
+            if (count <= 0)
+                return;
+            if (count == 1)
             {
-                itemX = x + currentMainOffset;
-                itemY = y;
-                itemWidth = allocatedMain;
-                itemHeight = totalHeight;
+                items[start].Rect = area;
+                return;
+            }
+
+            // Partition the items into two groups (A and B) to balance total sizes.
+            int groupACount = 0;
+            double sizeA = 0;
+            int i = start;
+            sizeA += items[i].Size;
+            groupACount++;
+            i++;
+            while (i < start + count && (sizeA + items[i].Size) * 2 < totalSize && items[i].Size > 0)
+            {
+                sizeA += items[i].Size;
+                groupACount++;
+                i++;
+            }
+            int groupBCount = count - groupACount;
+            double sizeB = totalSize - sizeA;
+
+            // Choose split orientation based on the area’s aspect ratio.
+            bool horizontalSplit = safeWidth >= safeHeight;
+            if (horizontalSplit)
+            {
+                double effectiveWidth = Math.Max(0, safeWidth - gap);
+                double mid = (totalSize > 0) ? (sizeA / totalSize) * effectiveWidth : effectiveWidth / 2;
+                // Ensure non-negative widths.
+                Rect areaA = new Rect(area.X, area.Y, Math.Max(0, mid), safeHeight);
+                Rect areaB = new Rect(area.X + mid + gap, area.Y, Math.Max(0, safeWidth - mid - gap), safeHeight);
+
+                DivideDisplayArea(items, start, groupACount, areaA, sizeA, gap);
+                DivideDisplayArea(items, start + groupACount, groupBCount, areaB, sizeB, gap);
             }
             else
             {
-                itemX = x;
-                itemY = y + currentMainOffset;
-                itemWidth = totalWidth;
-                itemHeight = allocatedMain;
+                double effectiveHeight = Math.Max(0, safeHeight - gap);
+                double mid = (totalSize > 0) ? (sizeA / totalSize) * effectiveHeight : effectiveHeight / 2;
+                Rect areaA = new Rect(area.X, area.Y, safeWidth, Math.Max(0, mid));
+                Rect areaB = new Rect(area.X, area.Y + mid + gap, safeWidth, Math.Max(0, safeHeight - mid - gap));
+
+                DivideDisplayArea(items, start, groupACount, areaA, sizeA, gap);
+                DivideDisplayArea(items, start + groupACount, groupBCount, areaB, sizeB, gap);
             }
-            var rollUpRect = new Rectangle
-            {
-                Width = itemWidth,
-                Height = itemHeight,
-                Fill = Brushes.Gray,
-                Stroke = Brushes.Black,
-                ToolTip = $"Rolled up {totalRolledUpSize} bytes"
-            };
-            canvas.Children.Add(rollUpRect);
-            Canvas.SetLeft(rollUpRect, itemX);
-            Canvas.SetTop(rollUpRect, itemY);
-            currentMainOffset += allocatedMain + gap;
         }
+
+        private class ChildItem
+        {
+            public string Path;
+            public double Size;
+            public bool IsFolder;
+            public FolderNode Folder;
+            public Rect Rect;
+        }
+
 
 
         class FolderNode 
