@@ -83,7 +83,10 @@ namespace Spacer
         private void RenderFolderMap(FolderNode node, Canvas canvas, double x, double y, double width, double height)
         {
             const double gap = 3;                // Gap between boxes and folder border
-            const double rollupThreshold = 3;      // Minimum size (in pixels) for a box
+            const double rollupThreshold = 3;      // Minimum size (in pixels) for a box before rollup
+            const double textMinWidth = 40;        // Minimum width to show text
+            const double textMinHeight = 20;       // Minimum height to show text
+
             if (node == null || width <= 0 || height <= 0)
                 return;
 
@@ -150,7 +153,31 @@ namespace Spacer
                 Canvas.SetLeft(rect, item.Rect.X);
                 Canvas.SetTop(rect, item.Rect.Y);
 
-                // Recurse into folders (but not for rollup items).
+                // For file boxes that are big enough, add centered text.
+                if (!item.IsFolder && !item.IsRollup && item.Rect.Width >= textMinWidth && item.Rect.Height >= textMinHeight)
+                {
+                    string fileName = System.IO.Path.GetFileName(item.Path);
+                    string fileSizeStr = FormatSize(item.Size);
+                    TextBlock textBlock = new TextBlock
+                    {
+                        Text = $"{fileName}\n{fileSizeStr}",
+                        FontSize = 10,
+                        Foreground = Brushes.Black,
+                        TextAlignment = TextAlignment.Center,
+                        TextWrapping = TextWrapping.Wrap
+                    };
+
+                    // Measure text size.
+                    textBlock.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                    Size textSize = textBlock.DesiredSize;
+                    double textX = item.Rect.X + (item.Rect.Width - textSize.Width) / 2;
+                    double textY = item.Rect.Y + (item.Rect.Height - textSize.Height) / 2;
+                    canvas.Children.Add(textBlock);
+                    Canvas.SetLeft(textBlock, textX);
+                    Canvas.SetTop(textBlock, textY);
+                }
+
+                // Recurse for folders (excluding rollup items).
                 if (item.IsFolder && !item.IsRollup)
                 {
                     RenderFolderMap(item.Folder, canvas,
@@ -191,7 +218,7 @@ namespace Spacer
             int groupBCount = count - groupACount;
             double sizeB = totalSize - sizeA;
 
-            // Choose orientation based on aspect ratio.
+            // Choose split orientation based on aspect ratio.
             bool horizontalSplit = safeWidth >= safeHeight;
             if (horizontalSplit)
             {
@@ -213,6 +240,20 @@ namespace Spacer
                 DivideDisplayArea(items, start, groupACount, areaA, sizeA, gap);
                 DivideDisplayArea(items, start + groupACount, groupBCount, areaB, sizeB, gap);
             }
+        }
+
+        private string FormatSize(double size)
+        {
+            if (size < 1024)
+                return $"{size:F0} B";
+            double kb = size / 1024;
+            if (kb < 1024)
+                return $"{kb:F1} KB";
+            double mb = kb / 1024;
+            if (mb < 1024)
+                return $"{mb:F1} MB";
+            double gb = mb / 1024;
+            return $"{gb:F1} GB";
         }
 
         private class ChildItem
