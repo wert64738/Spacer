@@ -79,13 +79,15 @@ namespace Spacer
 
             return node;
         }
+
         private void RenderFolderMap(FolderNode node, Canvas canvas, double x, double y, double width, double height)
         {
-            const double gap = 3;
+            const double gap = 3;                // Gap between boxes and folder border
+            const double rollupThreshold = 3;      // Minimum size (in pixels) for a box
             if (node == null || width <= 0 || height <= 0)
                 return;
 
-            // Collect child items.
+            // Build list of child items.
             List<ChildItem> items = new List<ChildItem>();
             foreach (var folder in node.SubFolders)
             {
@@ -98,17 +100,34 @@ namespace Spacer
             if (items.Count == 0)
                 return;
 
-            // Sort by size (largest first) and compute total.
+            // Sort items descending by size.
             items.Sort((a, b) => b.Size.CompareTo(a.Size));
             double totalSize = items.Sum(item => item.Size);
 
-            // Reserve a 3-pixel buffer along the folder’s border.
+            // Reserve a 3-pixel border inside the folder.
             Rect innerArea = new Rect(x + gap, y + gap, Math.Max(0, width - 2 * gap), Math.Max(0, height - 2 * gap));
 
-            // Recursively assign rectangles to items.
+            // First layout pass.
             DivideDisplayArea(items, 0, items.Count, innerArea, totalSize, gap);
 
-            // Render each child.
+            // Identify tiny items (allocated less than rollupThreshold in either dimension).
+            var tinyItems = items.Where(item => item.Rect.Width < rollupThreshold || item.Rect.Height < rollupThreshold).ToList();
+            if (tinyItems.Any())
+            {
+                // Aggregate their sizes.
+                double rollupSize = tinyItems.Sum(item => item.Size);
+                // Remove them from the list.
+                items.RemoveAll(item => item.Rect.Width < rollupThreshold || item.Rect.Height < rollupThreshold);
+                // Add an aggregated rollup item.
+                items.Add(new ChildItem { Path = "Rollup", Size = rollupSize, IsFolder = false, IsRollup = true });
+                // Re-sort and recalc total.
+                items.Sort((a, b) => b.Size.CompareTo(a.Size));
+                totalSize = items.Sum(item => item.Size);
+                // Re-run the layout with the updated items list.
+                DivideDisplayArea(items, 0, items.Count, innerArea, totalSize, gap);
+            }
+
+            // Render each item.
             foreach (var item in items)
             {
                 if (item.Rect.Width <= 0 || item.Rect.Height <= 0)
@@ -118,16 +137,21 @@ namespace Spacer
                 {
                     Width = item.Rect.Width,
                     Height = item.Rect.Height,
-                    Fill = item.IsFolder ? Brushes.LightGreen : Brushes.LightBlue,
                     Stroke = Brushes.Black,
-                    ToolTip = item.Path
+                    ToolTip = item.IsRollup ? $"Rolled up {item.Size} bytes" : item.Path
                 };
+
+                if (item.IsRollup)
+                    rect.Fill = Brushes.Gray;
+                else
+                    rect.Fill = item.IsFolder ? Brushes.LightGreen : Brushes.LightBlue;
+
                 canvas.Children.Add(rect);
                 Canvas.SetLeft(rect, item.Rect.X);
                 Canvas.SetTop(rect, item.Rect.Y);
 
-                // Recurse for folders, adding an inset so the folder border is visible.
-                if (item.IsFolder)
+                // Recurse into folders (but not for rollup items).
+                if (item.IsFolder && !item.IsRollup)
                 {
                     RenderFolderMap(item.Folder, canvas,
                         item.Rect.X + gap, item.Rect.Y + gap,
@@ -138,7 +162,7 @@ namespace Spacer
 
         private void DivideDisplayArea(List<ChildItem> items, int start, int count, Rect area, double totalSize, double gap)
         {
-            // Ensure safe dimensions.
+            // Ensure we work with non-negative dimensions.
             double safeWidth = Math.Max(0, area.Width);
             double safeHeight = Math.Max(0, area.Height);
             area = new Rect(area.X, area.Y, safeWidth, safeHeight);
@@ -151,7 +175,7 @@ namespace Spacer
                 return;
             }
 
-            // Partition the items into two groups (A and B) to balance total sizes.
+            // Partition items into two groups (A and B) to balance sizes.
             int groupACount = 0;
             double sizeA = 0;
             int i = start;
@@ -167,13 +191,12 @@ namespace Spacer
             int groupBCount = count - groupACount;
             double sizeB = totalSize - sizeA;
 
-            // Choose split orientation based on the area’s aspect ratio.
+            // Choose orientation based on aspect ratio.
             bool horizontalSplit = safeWidth >= safeHeight;
             if (horizontalSplit)
             {
                 double effectiveWidth = Math.Max(0, safeWidth - gap);
                 double mid = (totalSize > 0) ? (sizeA / totalSize) * effectiveWidth : effectiveWidth / 2;
-                // Ensure non-negative widths.
                 Rect areaA = new Rect(area.X, area.Y, Math.Max(0, mid), safeHeight);
                 Rect areaB = new Rect(area.X + mid + gap, area.Y, Math.Max(0, safeWidth - mid - gap), safeHeight);
 
@@ -199,8 +222,8 @@ namespace Spacer
             public bool IsFolder;
             public FolderNode Folder;
             public Rect Rect;
+            public bool IsRollup; // True if this item represents aggregated tiny items.
         }
-
 
 
         class FolderNode 
