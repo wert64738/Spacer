@@ -48,7 +48,7 @@ namespace Spacer
                 foreach (var file in files)
                 {
                     var fileInfo = new FileInfo(file);
-                    if (fileInfo.Length >= 1024) // Ignore files smaller than 1KB
+                    if (fileInfo.Length >= 100) // Ignore files smaller than 100 bytes
                     {
                         node.Files.Add((file, fileInfo.Length));
                     }
@@ -68,59 +68,138 @@ namespace Spacer
             return node;
         }
 
-        private void RenderFolderMap(FolderNode node, Canvas canvas, double x, double y, double width, double height)
+        private void RenderFolderMap(FolderNode node, Canvas canvas, double x, double y, double width, double height, bool verticalSplit = true)
         {
-            double totalSize = node.TotalSize;
-            if (totalSize == 0 || width <= 0 || height <= 0) return;
+            if (node == null || width <= 0 || height <= 0)
+                return;
 
+            var items = node.SubFolders
+                            .Select(f => new { f.Path, Size = f.TotalSize, IsFolder = true, Folder = f })
+                            .Concat(node.Files.Select(f => new { f.Path, Size = f.Size, IsFolder = false, Folder = (FolderNode)null }))
+                            .OrderByDescending(item => item.Size)
+                            .ToList();
+            if (items.Count == 0)
+                return;
+
+            double totalChildSize = items.Sum(item => item.Size);
             double folderPadding = 4;
             double filePadding = 1;
-            double offsetX = x + folderPadding;
-            double offsetY = y + folderPadding;
-            double adjustedWidth = Math.Max(0, width - 2 * folderPadding);
-            double adjustedHeight = Math.Max(0, height - 2 * folderPadding);
 
-            var allItems = node.SubFolders.Select(f => (f.Path, f.TotalSize, true)).Concat(node.Files.Select(f => (f.Path, f.Size, false))).OrderByDescending(f => f.Item2).ToList();
+            // Compute total gap space between items.
+            double totalGap = 0;
+            for (int i = 0; i < items.Count - 1; i++)
+                totalGap += items[i].IsFolder ? folderPadding : filePadding;
 
-            foreach (var (path, size, isFolder) in allItems)
+            // Determine available space in the primary direction.
+            double availableMain = verticalSplit ? width - totalGap : height - totalGap;
+            if (availableMain < 0)
+                availableMain = 0;
+
+            double currentMainOffset = 0;
+            double rollUpAccum = 0;      // Accumulated allocation for tiny items.
+            double rollUpChildSize = 0;  // Accumulated size for tooltip info.
+
+            foreach (var item in items)
             {
-                double proportion = size / totalSize;
-                double rectWidth = Math.Max(0, adjustedWidth * Math.Sqrt(proportion));
-                double rectHeight = Math.Max(0, adjustedHeight * Math.Sqrt(proportion));
-
-                rectWidth = Math.Max(0, Math.Min(rectWidth, adjustedWidth - (offsetX - x)));
-                rectHeight = Math.Max(0, Math.Min(rectHeight, adjustedHeight - (offsetY - y)));
-
-                var rect = new Rectangle
+                double allocatedMain = (item.Size / totalChildSize) * availableMain;
+                // If the allocated space is less than 3 pixels, accumulate for rollup.
+                if (allocatedMain < 3)
                 {
-                    Width = rectWidth,
-                    Height = rectHeight,
-                    Fill = isFolder ? Brushes.LightGreen : Brushes.LightBlue,
-                    Stroke = Brushes.Black,
-                    ToolTip = path
-                };
-                canvas.Children.Add(rect);
-                Canvas.SetLeft(rect, offsetX);
-                Canvas.SetTop(rect, offsetY);
-
-                if (isFolder)
-                {
-                    var subFolder = node.SubFolders.First(f => f.Path == path);
-                    RenderFolderMap(subFolder, canvas, offsetX, offsetY, rectWidth, rectHeight);
-                    offsetX += rectWidth + folderPadding;
+                    rollUpAccum += allocatedMain;
+                    rollUpChildSize += item.Size;
                 }
                 else
                 {
-                    offsetX += rectWidth + filePadding;
-                }
+                    // Flush any pending rolled-up items before rendering a normal item.
+                    if (rollUpAccum > 0)
+                    {
+                        DrawRolledUpRect(canvas, x, y, verticalSplit, ref currentMainOffset, rollUpAccum, width, height, rollUpChildSize, folderPadding);
+                        rollUpAccum = 0;
+                        rollUpChildSize = 0;
+                    }
 
-                if (offsetX > x + adjustedWidth)
-                {
-                    offsetX = x + folderPadding;
-                    offsetY += rectHeight + (isFolder ? folderPadding : filePadding);
+                    double itemX, itemY, itemWidth, itemHeight;
+                    if (verticalSplit)
+                    {
+                        itemX = x + currentMainOffset;
+                        itemY = y;
+                        itemWidth = allocatedMain;
+                        itemHeight = height;
+                    }
+                    else
+                    {
+                        itemX = x;
+                        itemY = y + currentMainOffset;
+                        itemWidth = width;
+                        itemHeight = allocatedMain;
+                    }
+
+                    var rect = new Rectangle
+                    {
+                        Width = itemWidth,
+                        Height = itemHeight,
+                        Fill = item.IsFolder ? Brushes.LightGreen : Brushes.LightBlue,
+                        Stroke = Brushes.Black,
+                        ToolTip = item.Path
+                    };
+                    canvas.Children.Add(rect);
+                    Canvas.SetLeft(rect, itemX);
+                    Canvas.SetTop(rect, itemY);
+
+                    if (item.IsFolder)
+                    {
+                        RenderFolderMap(item.Folder, canvas, itemX, itemY, itemWidth, itemHeight, !verticalSplit);
+                    }
+
+                    currentMainOffset += allocatedMain;
+                    if (item != items.Last())
+                    {
+                        double gap = item.IsFolder ? folderPadding : filePadding;
+                        currentMainOffset += gap;
+                    }
                 }
             }
+
+            // Flush any remaining rolled-up items.
+            if (rollUpAccum > 0)
+            {
+                DrawRolledUpRect(canvas, x, y, verticalSplit, ref currentMainOffset, rollUpAccum, width, height, rollUpChildSize, folderPadding);
+            }
         }
+
+        private void DrawRolledUpRect(Canvas canvas, double x, double y, bool verticalSplit, ref double currentMainOffset,
+                                      double allocatedMain, double totalWidth, double totalHeight, double totalRolledUpSize, double gap)
+        {
+            double itemX, itemY, itemWidth, itemHeight;
+            if (verticalSplit)
+            {
+                itemX = x + currentMainOffset;
+                itemY = y;
+                itemWidth = allocatedMain;
+                itemHeight = totalHeight;
+            }
+            else
+            {
+                itemX = x;
+                itemY = y + currentMainOffset;
+                itemWidth = totalWidth;
+                itemHeight = allocatedMain;
+            }
+            var rollUpRect = new Rectangle
+            {
+                Width = itemWidth,
+                Height = itemHeight,
+                Fill = Brushes.Gray,
+                Stroke = Brushes.Black,
+                ToolTip = $"Rolled up {totalRolledUpSize} bytes"
+            };
+            canvas.Children.Add(rollUpRect);
+            Canvas.SetLeft(rollUpRect, itemX);
+            Canvas.SetTop(rollUpRect, itemY);
+            currentMainOffset += allocatedMain + gap;
+        }
+
+
 
         class FolderNode 
         {
