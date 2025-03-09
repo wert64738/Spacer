@@ -54,9 +54,12 @@
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0">
+                
+                <Button Content="C:\" Click="CFolderButton_Click" Height="22" Width="80"/>
+                
                 <TextBox x:Name="RootFolderTextBox" Width="400" Margin="0" IsReadOnly="True"/>
                 
-                <Button Content="Scan Folder" Click="ScanFolderButton_Click" Height="22" Width="80"/>
+                <Button Content="Choose Folder" Click="ScanFolderButton_Click" Height="22" Width="80"/>
 
                 <Button Content="Zoom Out" Click="ZoomOutButton_Click" Height="22" Width="80"/>
                 

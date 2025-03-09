@@ -60,11 +60,69 @@ namespace Spacer
             }
         }
 
+        private async void CFolderButton_Click(object sender, RoutedEventArgs e)
+        {
+            StartBusyIndicator();
+
+            try
+            {
+                string selectedPath = "C:\\";
+                RootFolderTextBox.Text = selectedPath;
+
+                _rootFolder = await Task.Run(() => BuildFolderTree(selectedPath));
+
+                MainCanvas.Children.Clear();
+                RenderFolderMap(_rootFolder, MainCanvas, 0, 0, MainCanvas.ActualWidth, MainCanvas.ActualHeight);
+            }
+            finally
+            {
+                StopBusyindicator();
+            }
+        }
+
+
         private async void ScanFolderButton_Click(object sender, RoutedEventArgs e)
+        {
+            StartBusyIndicator();
+            try
+            {
+                // Using WPF's native OpenFolderDialog (available in newer .NET versions)
+                var folderDialog = new Microsoft.Win32.OpenFolderDialog
+                {
+                    Title = "Select a folder to scan",
+                    InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)
+                };
+
+                if (folderDialog.ShowDialog() == true)
+                {
+                    string selectedPath = folderDialog.FolderName;
+                    RootFolderTextBox.Text = selectedPath;
+                    _rootFolder = await Task.Run(() => BuildFolderTree(selectedPath));
+                    MainCanvas.Children.Clear();
+                    RenderFolderMap(_rootFolder, MainCanvas, 0, 0, MainCanvas.ActualWidth, MainCanvas.ActualHeight);
+                }
+            }
+            finally
+            {
+                StopBusyindicator();
+            }
+        }
+
+
+        private void StopBusyindicator()
+        {
+            ProcessingIndicator.BeginAnimation(UIElement.OpacityProperty, null);
+            ProcessingIndicator.Visibility = Visibility.Collapsed;
+            MainCanvas.Opacity = 1.0;
+            Mouse.OverrideCursor = Cursors.Arrow;
+        }
+
+        private void StartBusyIndicator()
         {
             ProcessingIndicator.Visibility = Visibility.Visible;
             ProcessingIndicator.Text = "Scanning directories...";
             MainCanvas.Opacity = 0.5;
+            Mouse.OverrideCursor = Cursors.Wait;
 
             DoubleAnimation flashAnimation = new DoubleAnimation(1.0, 0.0, new Duration(TimeSpan.FromSeconds(0.5)))
             {
@@ -72,35 +130,6 @@ namespace Spacer
                 RepeatBehavior = RepeatBehavior.Forever
             };
             ProcessingIndicator.BeginAnimation(UIElement.OpacityProperty, flashAnimation);
-
-            try
-            {
-                var folderDialog = new Microsoft.Win32.OpenFileDialog
-                {
-                    CheckFileExists = false,
-                    CheckPathExists = true,
-                    FileName = "Select Folder",
-                    Filter = "Folders|*."
-                };
-
-                bool? result = folderDialog.ShowDialog();
-                if (result == true)
-                {
-                    string selectedPath = System.IO.Path.GetDirectoryName(folderDialog.FileName);
-                    RootFolderTextBox.Text = selectedPath;
-
-                    _rootFolder = await Task.Run(() => BuildFolderTree(selectedPath));
-
-                    MainCanvas.Children.Clear();
-                    RenderFolderMap(_rootFolder, MainCanvas, 0, 0, MainCanvas.ActualWidth, MainCanvas.ActualHeight);
-                }
-            }
-            finally
-            {
-                ProcessingIndicator.BeginAnimation(UIElement.OpacityProperty, null);
-                ProcessingIndicator.Visibility = Visibility.Collapsed;
-                MainCanvas.Opacity = 1.0;
-            }
         }
 
         private FolderNode BuildFolderTree(string path)
