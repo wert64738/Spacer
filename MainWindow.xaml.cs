@@ -231,6 +231,23 @@ namespace Spacer
                     cm.Items.Add(miOpen);
                     cm.Items.Add(miDelete);
                     rect.ContextMenu = cm;
+
+                    // Attach a double-click event to open the file.
+                    rect.MouseLeftButtonDown += (s, e) =>
+                    {
+                        if (e.ClickCount == 2)
+                        {
+                            try
+                            {
+                                Process.Start(new ProcessStartInfo(item.Path) { UseShellExecute = true });
+                            }
+                            catch (Exception ex)
+                            {
+                                MessageBox.Show("Could not open file: " + ex.Message);
+                            }
+                            e.Handled = true;
+                        }
+                    };
                 }
 
                 // For file items that are big enough, add centered text.
