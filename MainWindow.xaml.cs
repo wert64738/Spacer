@@ -205,7 +205,7 @@ namespace Spacer
             return node;
         }
 
-        private void RenderFolderMap(FolderNode node, Canvas canvas, double x, double y, double width, double height)
+        private void RenderFolderMap(FolderNode node, Canvas canvas, double x, double y, double width, double height, int depth = 0)
         {
             const double gap = 1;
             const double rollupThreshold = 3;
@@ -262,7 +262,7 @@ namespace Spacer
                 if (item.IsRollup)
                     rect.Fill = Brushes.Gray;
                 else if (item.IsFolder)
-                    rect.Fill = Brushes.LightGreen;
+                    rect.Fill = GetFolderDepthColor(depth);
                 else
                     rect.Fill = GetFileTypeColor(item.Path);
 
@@ -322,9 +322,29 @@ namespace Spacer
                     const double folderContentPadding = 6;
                     RenderFolderMap(item.Folder, canvas,
                         item.Rect.X + gap, item.Rect.Y + gap + folderContentPadding,
-                        Math.Max(0, item.Rect.Width - 2 * gap), Math.Max(0, item.Rect.Height - 2 * gap - folderContentPadding));
+                        Math.Max(0, item.Rect.Width - 2 * gap), Math.Max(0, item.Rect.Height - 2 * gap - folderContentPadding), depth + 1);
                 }
             }
+        }
+
+        private SolidColorBrush GetFolderDepthColor(int depth)
+        {
+            Color lightGreen = Colors.LightGreen;
+            Color darkGreen = Colors.DarkOliveGreen; // or Colors.Black
+
+            // Calculate how much to darken the color based on depth
+            double maxDepth = 10; // Adjust this based on your maximum expected depth
+            double factor = Math.Min(depth / maxDepth, 1.0);
+
+            // Interpolate between light and dark colors
+            Color darkerColor = Color.FromArgb(
+                (byte)(255 * (1 - factor)), // Alpha channel can also get darker
+                (byte)(lightGreen.R * (1 - factor) + darkGreen.R * factor),
+                (byte)(lightGreen.G * (1 - factor) + darkGreen.G * factor),
+                (byte)(lightGreen.B * (1 - factor) + darkGreen.B * factor)
+            );
+
+            return new SolidColorBrush(darkerColor);
         }
 
         private MenuItem AddDeleteMenuHandler(ChildItem item)
