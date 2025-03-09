@@ -54,13 +54,13 @@
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0">
-                <Button Content="C:\" Click="CFolderButton_Click" Height="22" Width="40"/>
-                <TextBox x:Name="RootFolderTextBox" Width="400" Margin="0" IsReadOnly="True"/>
                 <Button Content="Choose Folder" Click="ScanFolderButton_Click" Height="22" Width="80"/>
-                <Button Content="Zoom Out" Click="ZoomOutButton_Click" Height="22" Width="80"/>
+                <Button Content="C:\" Click="CFolderButton_Click" Height="22" Width="40" />
+                <TextBox x:Name="RootFolderTextBox" Width="400" Margin="0" IsReadOnly="True"/>
+                <Button Content="Zoom Out" Click="ZoomOutButton_ClickAsync" Height="22" Width="80"/>
                 <TextBlock x:Name="ProcessingIndicator" Text="Processing..." Visibility="Collapsed" Margin="5,0,0,0" VerticalAlignment="Center"/>
             </StackPanel>
-            <Button Content="X" Click="ExitButton_Click" Grid.Column="1" Margin="2" Padding="3,1" FontSize="10" Width="25" Height="25" Background="Red" />
+            <Button Content="X" Click="ExitButton_Click" Grid.Column="1" Margin="2" Padding="3,1" FontSize="10" Width="25" Height="25" Background="OrangeRed" />
         </Grid>
         <Canvas x:Name="MainCanvas" Grid.Row="1" Background="WhiteSmoke" Margin="2"/>
     </Grid>

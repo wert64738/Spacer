@@ -62,15 +62,13 @@ namespace Spacer
 
         private async void CFolderButton_Click(object sender, RoutedEventArgs e)
         {
-            StartBusyIndicator();
+            await StartBusyIndicatorAsync();
 
             try
             {
                 string selectedPath = "C:\\";
                 RootFolderTextBox.Text = selectedPath;
-
                 _rootFolder = await Task.Run(() => BuildFolderTree(selectedPath));
-
                 MainCanvas.Children.Clear();
                 RenderFolderMap(_rootFolder, MainCanvas, 0, 0, MainCanvas.ActualWidth, MainCanvas.ActualHeight);
             }
@@ -80,13 +78,11 @@ namespace Spacer
             }
         }
 
-
         private async void ScanFolderButton_Click(object sender, RoutedEventArgs e)
         {
-            StartBusyIndicator();
+            await StartBusyIndicatorAsync();
             try
             {
-                // Using WPF's native OpenFolderDialog (available in newer .NET versions)
                 var folderDialog = new Microsoft.Win32.OpenFolderDialog
                 {
                     Title = "Select a folder to scan",
@@ -108,6 +104,48 @@ namespace Spacer
             }
         }
 
+        private async void ZoomOutButton_ClickAsync(object sender, RoutedEventArgs e)
+        {
+            if (_rootFolder == null || _rootFolder.Path == null)
+                return;
+
+            try
+            {
+                if (_rootFolder != null && _rootFolder.Parent != null)
+                {
+                    ZoomToFolder(_rootFolder.Parent);
+                }
+                else
+                {
+                    DirectoryInfo parentDir = Directory.GetParent(_rootFolder.Path);
+                    if (parentDir != null)
+                    {
+                        await StartBusyIndicatorAsync();
+                        FolderNode newRoot = await Task.Run(() => BuildFolderTree(parentDir.FullName));
+                        ZoomToFolder(newRoot);
+                    }
+                    else
+                    {
+                        MessageBox.Show("Already at the drive root.");
+                    }
+                }
+            }
+            finally
+            {
+                StopBusyindicator();
+            }
+
+        }
+
+        private void ZoomToFolder(FolderNode folder)
+        {
+            _rootFolder = folder;
+            RootFolderTextBox.Text = folder.Path;
+            MainCanvas.Children.Clear();
+            double width = MainCanvas.ActualWidth;
+            double height = MainCanvas.ActualHeight;
+            RenderFolderMap(folder, MainCanvas, 0, 0, width, height);
+        }
 
         private void StopBusyindicator()
         {
@@ -117,7 +155,7 @@ namespace Spacer
             Mouse.OverrideCursor = Cursors.Arrow;
         }
 
-        private void StartBusyIndicator()
+        private async Task StartBusyIndicatorAsync()
         {
             ProcessingIndicator.Visibility = Visibility.Visible;
             ProcessingIndicator.Text = "Scanning directories...";
@@ -130,6 +168,7 @@ namespace Spacer
                 RepeatBehavior = RepeatBehavior.Forever
             };
             ProcessingIndicator.BeginAnimation(UIElement.OpacityProperty, flashAnimation);
+            await Task.Yield();
         }
 
         private FolderNode BuildFolderTree(string path)
@@ -566,63 +605,6 @@ namespace Spacer
                 b = HueToRGB(p, q, h - 1.0 / 3.0);
             }
             return Color.FromRgb((byte)Math.Round(r * 255), (byte)Math.Round(g * 255), (byte)Math.Round(b * 255));
-        }
-
-        private async void ZoomToFolder(FolderNode folder)
-        {
-            ProcessingIndicator.Visibility = Visibility.Visible;
-            ProcessingIndicator.Text = "Processing...";
-            MainCanvas.Opacity = 0.5;
-            await Task.Yield();
-
-            try
-            {
-                _rootFolder = folder;
-                RootFolderTextBox.Text = folder.Path;
-                MainCanvas.Children.Clear();
-                double width = MainCanvas.ActualWidth;
-                double height = MainCanvas.ActualHeight;
-                RenderFolderMap(folder, MainCanvas, 0, 0, width, height);
-            }
-            finally
-            {
-                ProcessingIndicator.Visibility = Visibility.Collapsed;
-                MainCanvas.Opacity = 1.0;
-            }
-        }
-
-        private async void ZoomOutButton_Click(object sender, RoutedEventArgs e)
-        {
-            ProcessingIndicator.Visibility = Visibility.Visible;
-            ProcessingIndicator.Text = "Processing...";
-            MainCanvas.Opacity = 0.5;
-            await Task.Yield();
-
-            try
-            {
-                if (_rootFolder != null && _rootFolder.Parent != null)
-                {
-                    ZoomToFolder(_rootFolder.Parent);
-                }
-                else
-                {
-                    DirectoryInfo parentDir = Directory.GetParent(_rootFolder.Path);
-                    if (parentDir != null)
-                    {
-                        FolderNode newRoot = BuildFolderTree(parentDir.FullName);
-                        ZoomToFolder(newRoot);
-                    }
-                    else
-                    {
-                        MessageBox.Show("Already at the drive root.");
-                    }
-                }
-            }
-            finally
-            {
-                ProcessingIndicator.Visibility = Visibility.Collapsed;
-                MainCanvas.Opacity = 1.0;
-            }
         }
 
         class FolderNode
