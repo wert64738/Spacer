@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Shapes;
@@ -33,6 +34,30 @@ namespace Spacer
         }
 
         private FolderNode _rootFolder;
+
+        // Allow dragging the window by clicking anywhere.
+        private void Window_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            this.DragMove();
+        }
+
+        // Title bar click handler: double-click toggles maximize.
+        private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            if (e.ClickCount == 2)
+            {
+                if (this.WindowState == WindowState.Normal)
+                    this.WindowState = WindowState.Maximized;
+                else
+                    this.WindowState = WindowState.Normal;
+            }
+        }
+
+        // Exit button handler.
+        private void ExitButton_Click(object sender, RoutedEventArgs e)
+        {
+            this.Close();
+        }
 
         private void Window_SizeChanged(object sender, SizeChangedEventArgs e)
         {
@@ -123,7 +148,7 @@ namespace Spacer
 
         private void RenderFolderMap(FolderNode node, Canvas canvas, double x, double y, double width, double height)
         {
-            const double gap = 2;           // Reduced gap between boxes and folder border.
+            const double gap = 2;
             const double rollupThreshold = 3;
             const double textMinWidth = 40;
             const double textMinHeight = 20;
@@ -303,10 +328,11 @@ namespace Spacer
                     if (string.IsNullOrEmpty(folderName))
                         folderName = item.Path;
 
+                    // Folder name with FontSize 6 and Bold.
                     TextBlock folderText = new TextBlock
                     {
                         Text = folderName,
-                        FontSize = 7,
+                        FontSize = 6,
                         FontWeight = FontWeights.Bold,
                         Foreground = Brushes.Black,
                         Background = Brushes.Transparent,
@@ -320,6 +346,7 @@ namespace Spacer
                     Canvas.SetLeft(folderText, item.Rect.X);
                     Canvas.SetTop(folderText, item.Rect.Y);
 
+                    // Folder content padding set to 6.
                     const double folderContentPadding = 6;
                     RenderFolderMap(item.Folder, canvas,
                         item.Rect.X + gap, item.Rect.Y + gap + folderContentPadding,
@@ -394,44 +421,42 @@ namespace Spacer
             return $"{gb:F1} GB";
         }
 
-        // Updated GetFileTypeColor: uses a base color per category and then varies it slightly based on the file extension.
+        // GetFileTypeColor varies colors slightly within each category based on extension.
         private Brush GetFileTypeColor(string filePath)
         {
             string ext = System.IO.Path.GetExtension(filePath).ToLowerInvariant();
             Color baseColor;
             if (ImageExtensions.Contains(ext))
-                baseColor = Colors.PeachPuff;      // Base for images
+                baseColor = Colors.PeachPuff;
             else if (MovieExtensions.Contains(ext))
-                baseColor = Colors.LemonChiffon;     // Base for movies
+                baseColor = Colors.LemonChiffon;
             else if (AudioExtensions.Contains(ext))
-                baseColor = Colors.MediumOrchid;     // Base for audio
+                baseColor = Colors.MediumOrchid;
             else if (TextExtensions.Contains(ext))
-                baseColor = Colors.Thistle;          // Base for text files
+                baseColor = Colors.Thistle;
             else if (OfficeExtensions.Contains(ext))
-                baseColor = Colors.PaleGreen;        // Base for office docs
+                baseColor = Colors.PaleGreen;
             else if (PDFExtensions.Contains(ext))
-                baseColor = Colors.Khaki;            // Base for PDFs
+                baseColor = Colors.Khaki;
             else if (CompressedExtensions.Contains(ext))
-                baseColor = Colors.Gold;             // Base for compressed files
+                baseColor = Colors.Gold;
             else if (CodeExtensions.Contains(ext))
-                baseColor = Colors.LightSlateGray;   // Base for code
+                baseColor = Colors.LightSlateGray;
             else if (BinaryExtensions.Contains(ext))
-                baseColor = Colors.PowderBlue;       // Base for binaries
+                baseColor = Colors.PowderBlue;
             else if (DatabaseExtensions.Contains(ext))
-                baseColor = Colors.DarkSeaGreen;     // Base for databases
+                baseColor = Colors.DarkSeaGreen;
             else if (VectorExtensions.Contains(ext))
-                baseColor = Colors.LightPink;        // Base for vector graphics
+                baseColor = Colors.LightPink;
             else
-                baseColor = Colors.LightBlue;        // Default
+                baseColor = Colors.LightBlue;
 
             return new SolidColorBrush(VaryColorForExtension(ext, baseColor));
         }
 
-        // Vary the base color's lightness slightly based on the extension string.
         private Color VaryColorForExtension(string ext, Color baseColor)
         {
             int hash = ext.GetHashCode();
-            // Compute a variation offset in the range [-0.05, +0.05]
             double offset = ((hash % 11) - 5) / 100.0;
             double h, s, l;
             ColorToHSL(baseColor, out h, out s, out l);
@@ -439,7 +464,6 @@ namespace Spacer
             return ColorFromHSL(h, s, l);
         }
 
-        // Helper: Convert a Color to HSL.
         private void ColorToHSL(Color c, out double h, out double s, out double l)
         {
             double r = c.R / 255.0;
