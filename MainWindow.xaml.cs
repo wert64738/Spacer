@@ -238,9 +238,11 @@ namespace Spacer
             var tinyItems = items.Where(item => item.Rect.Width < rollupThreshold || item.Rect.Height < rollupThreshold).ToList();
             if (tinyItems.Any())
             {
+                int rollupCount = tinyItems.Count;
+                int maxSize = tinyItems.Max(item => (int)item.Size);
                 double rollupSize = tinyItems.Sum(item => item.Size);
                 items.RemoveAll(item => item.Rect.Width < rollupThreshold || item.Rect.Height < rollupThreshold);
-                items.Add(new ChildItem { Path = "Rollup", Size = rollupSize, IsFolder = false, IsRollup = true });
+                items.Add(new ChildItem { Path = "Rollup", Size = rollupSize, MaxSize = maxSize, Count = rollupCount, IsFolder = false, IsRollup = true });
                 items.Sort((a, b) => b.Size.CompareTo(a.Size));
                 totalSize = items.Sum(item => item.Size);
                 DivideDisplayArea(items, 0, items.Count, innerArea, totalSize, gap);
@@ -258,7 +260,7 @@ namespace Spacer
                     Stroke = Brushes.DarkGray,
                     RadiusX = 2,
                     RadiusY = 2,
-                    ToolTip = item.IsRollup ? $"Rolled up {item.Size} bytes" : item.Path
+                    ToolTip = item.IsRollup ? $"Rolled up {item.Count} items less than {FormatFileSize((long)item.MaxSize)}" : item.Path
                 };
 
                 if (item.IsRollup)
@@ -347,6 +349,17 @@ namespace Spacer
             );
 
             return new SolidColorBrush(darkerColor);
+        }
+
+        private string FormatFileSize(long bytes)
+        {
+            // Determine the appropriate unit based on the size
+            if (bytes >= 1024 * 1024) // MB threshold
+                return $"{bytes / (1024 * 1024)} MB";
+            else if (bytes >= 1024)   // KB threshold
+                return $"{bytes / 1024} KB";
+            else                       // Bytes
+                return $"{bytes} bytes";
         }
 
         private MenuItem AddDeleteMenuHandler(ChildItem item)
@@ -672,6 +685,8 @@ namespace Spacer
         {
             public string Path;
             public double Size;
+            public double MaxSize;
+            public int Count;
             public bool IsFolder;
             public FolderNode Folder;
             public Rect Rect;
