@@ -2,15 +2,23 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Shapes;
 
 namespace Spacer
 {
     public partial class MainWindow : Window
     {
+        // Define file type extension lists.
+        private static readonly string[] ImageExtensions = { ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff" };
+        private static readonly string[] MovieExtensions = { ".mp4", ".avi", ".mkv", ".mov", ".wmv" };
+        private static readonly string[] TextExtensions = { ".txt", ".md", ".log", ".csv", ".xml", ".json" };
+        private static readonly string[] BinaryExtensions = { ".exe", ".dll", ".bin", ".dat", ".sys" };
+
         public MainWindow()
         {
             InitializeComponent();
@@ -27,24 +35,50 @@ namespace Spacer
             }
         }
 
-        private void ScanFolderButton_Click(object sender, RoutedEventArgs e)
+        private async void ScanFolderButton_Click(object sender, RoutedEventArgs e)
         {
-            var folderDialog = new Microsoft.Win32.OpenFileDialog
-            {
-                CheckFileExists = false,
-                CheckPathExists = true,
-                FileName = "Select Folder",
-                Filter = "Folders|*."
-            };
+            // Show processing indicator and dim main display.
+            ProcessingIndicator.Visibility = Visibility.Visible;
+            ProcessingIndicator.Text = "Scanning directories...";
+            MainCanvas.Opacity = 0.5;
 
-            bool? result = folderDialog.ShowDialog();
-            if (result == true)
+            // Create a flashing animation.
+            DoubleAnimation flashAnimation = new DoubleAnimation(1.0, 0.0, new Duration(TimeSpan.FromSeconds(0.5)))
             {
-                string selectedPath = System.IO.Path.GetDirectoryName(folderDialog.FileName);
-                RootFolderTextBox.Text = selectedPath;
-                _rootFolder = BuildFolderTree(selectedPath);  // Build the folder tree
-                MainCanvas.Children.Clear();
-                RenderFolderMap(_rootFolder, MainCanvas, 0, 0, MainCanvas.ActualWidth, MainCanvas.ActualHeight);
+                AutoReverse = true,
+                RepeatBehavior = RepeatBehavior.Forever
+            };
+            ProcessingIndicator.BeginAnimation(UIElement.OpacityProperty, flashAnimation);
+
+            try
+            {
+                var folderDialog = new Microsoft.Win32.OpenFileDialog
+                {
+                    CheckFileExists = false,
+                    CheckPathExists = true,
+                    FileName = "Select Folder",
+                    Filter = "Folders|*."
+                };
+
+                bool? result = folderDialog.ShowDialog();
+                if (result == true)
+                {
+                    string selectedPath = System.IO.Path.GetDirectoryName(folderDialog.FileName);
+                    RootFolderTextBox.Text = selectedPath;
+
+                    // Run the folder scan in a background task.
+                    _rootFolder = await Task.Run(() => BuildFolderTree(selectedPath));
+
+                    MainCanvas.Children.Clear();
+                    RenderFolderMap(_rootFolder, MainCanvas, 0, 0, MainCanvas.ActualWidth, MainCanvas.ActualHeight);
+                }
+            }
+            finally
+            {
+                // Stop flashing and restore full opacity.
+                ProcessingIndicator.BeginAnimation(UIElement.OpacityProperty, null);
+                ProcessingIndicator.Visibility = Visibility.Collapsed;
+                MainCanvas.Opacity = 1.0;
             }
         }
 
@@ -85,10 +119,10 @@ namespace Spacer
 
         private void RenderFolderMap(FolderNode node, Canvas canvas, double x, double y, double width, double height)
         {
-            const double gap = 3;                   // Gap between boxes and folder border
-            const double rollupThreshold = 3;         // Minimum size (in pixels) for a box before rollup
-            const double textMinWidth = 40;           // Minimum width to show text
-            const double textMinHeight = 20;          // Minimum height to show text
+            const double gap = 3;           // Gap between boxes and folder border
+            const double rollupThreshold = 3; // Minimum size (in pixels) for a box before rollup
+            const double textMinWidth = 40;   // Minimum width to show text
+            const double textMinHeight = 20;  // Minimum height to show text
 
             if (node == null || width <= 0 || height <= 0)
                 return;
@@ -116,7 +150,7 @@ namespace Spacer
             // First layout pass.
             DivideDisplayArea(items, 0, items.Count, innerArea, totalSize, gap);
 
-            // Identify tiny items (allocated less than rollupThreshold in either dimension).
+            // Identify tiny items.
             var tinyItems = items.Where(item => item.Rect.Width < rollupThreshold || item.Rect.Height < rollupThreshold).ToList();
             if (tinyItems.Any())
             {
@@ -143,15 +177,23 @@ namespace Spacer
                 };
 
                 if (item.IsRollup)
+                {
                     rect.Fill = Brushes.Gray;
-                else
-                    rect.Fill = item.IsFolder ? Brushes.LightGreen : Brushes.LightBlue;
+                }
+                else if (item.IsFolder)
+                {
+                    rect.Fill = Brushes.LightGreen;
+                }
+                else // File items: choose color based on extension.
+                {
+                    rect.Fill = GetFileTypeColor(item.Path);
+                }
 
                 canvas.Children.Add(rect);
                 Canvas.SetLeft(rect, item.Rect.X);
                 Canvas.SetTop(rect, item.Rect.Y);
 
-                // For file boxes (non-folders and non-rollup) that are big enough, add centered text.
+                // For file boxes that are big enough, add centered text.
                 if (!item.IsFolder && !item.IsRollup && item.Rect.Width >= textMinWidth && item.Rect.Height >= textMinHeight)
                 {
                     string fileName = System.IO.Path.GetFileName(item.Path);
@@ -198,11 +240,9 @@ namespace Spacer
                     Canvas.SetTop(grid, gridY);
                 }
 
-                // For folders (non-rollup), add folder name at the very top with extra padding,
-                // attach a double-click event, and recurse into the folder.
+                // For folders, add folder name at the very top and enable double-click zoom.
                 if (item.IsFolder && !item.IsRollup)
                 {
-                    // Attach double-click event for zooming in.
                     rect.MouseLeftButtonDown += (s, e) =>
                     {
                         if (e.ClickCount == 2)
@@ -212,10 +252,9 @@ namespace Spacer
                         }
                     };
 
-                    // Add the folder name (flush with the top of the folder box).
                     string folderName = System.IO.Path.GetFileName(item.Path);
                     if (string.IsNullOrEmpty(folderName))
-                        folderName = item.Path; // Use full path if filename is empty (e.g., drive root)
+                        folderName = item.Path;
 
                     TextBlock folderText = new TextBlock
                     {
@@ -227,16 +266,13 @@ namespace Spacer
                         Width = item.Rect.Width,
                         HorizontalAlignment = HorizontalAlignment.Center,
                         VerticalAlignment = VerticalAlignment.Top,
-                        IsHitTestVisible = false  // Allows mouse events to pass through.
+                        IsHitTestVisible = false
                     };
                     canvas.Children.Add(folderText);
                     Canvas.SetLeft(folderText, item.Rect.X);
-                    Canvas.SetTop(folderText, item.Rect.Y); // No extra padding here.
+                    Canvas.SetTop(folderText, item.Rect.Y);
 
-                    // Define padding for content only.
                     const double folderContentPadding = 5;
-
-                    // Recurse into the folder, pushing the content down by folderContentPadding.
                     RenderFolderMap(item.Folder, canvas,
                         item.Rect.X + gap, item.Rect.Y + gap + folderContentPadding,
                         Math.Max(0, item.Rect.Width - 2 * gap), Math.Max(0, item.Rect.Height - 2 * gap - folderContentPadding));
@@ -244,10 +280,8 @@ namespace Spacer
             }
         }
 
-
         private void DivideDisplayArea(List<ChildItem> items, int start, int count, Rect area, double totalSize, double gap)
         {
-            // Ensure we work with non-negative dimensions.
             double safeWidth = Math.Max(0, area.Width);
             double safeHeight = Math.Max(0, area.Height);
             area = new Rect(area.X, area.Y, safeWidth, safeHeight);
@@ -260,7 +294,6 @@ namespace Spacer
                 return;
             }
 
-            // Partition items into two groups (A and B) to balance sizes.
             int groupACount = 0;
             double sizeA = 0;
             int i = start;
@@ -276,7 +309,6 @@ namespace Spacer
             int groupBCount = count - groupACount;
             double sizeB = totalSize - sizeA;
 
-            // Choose split orientation based on aspect ratio.
             bool horizontalSplit = safeWidth >= safeHeight;
             if (horizontalSplit)
             {
@@ -314,49 +346,76 @@ namespace Spacer
             return $"{gb:F1} GB";
         }
 
-        private class ChildItem
+        private Brush GetFileTypeColor(string filePath)
         {
-            public string Path;
-            public double Size;
-            public bool IsFolder;
-            public FolderNode Folder;
-            public Rect Rect;
-            public bool IsRollup; // True if this item represents aggregated tiny items.
-        }
+            string ext = System.IO.Path.GetExtension(filePath).ToLowerInvariant();
 
-        private void ZoomToFolder(FolderNode folder)
-        {
-            // Update the current folder.
-            _rootFolder = folder;
-            // Optionally update the UI with the new folder path.
-            RootFolderTextBox.Text = folder.Path;
-            // Clear and re-render the treemap using the new folder as the root.
-            MainCanvas.Children.Clear();
-            double width = MainCanvas.ActualWidth;
-            double height = MainCanvas.ActualHeight;
-            RenderFolderMap(folder, MainCanvas, 0, 0, width, height);
-        }
-
-        // ZoomOutButton_Click handler.
-        private void ZoomOutButton_Click(object sender, RoutedEventArgs e)
-        {
-            if (_rootFolder != null && _rootFolder.Parent != null)
-            {
-                ZoomToFolder(_rootFolder.Parent);
-            }
+            if (ImageExtensions.Contains(ext))
+                return new SolidColorBrush((Color)ColorConverter.ConvertFromString("#7FB3D5"));
+            else if (MovieExtensions.Contains(ext))
+                return new SolidColorBrush((Color)ColorConverter.ConvertFromString("#A569BD"));
+            else if (TextExtensions.Contains(ext))
+                return new SolidColorBrush((Color)ColorConverter.ConvertFromString("#82E0AA"));
+            else if (BinaryExtensions.Contains(ext))
+                return new SolidColorBrush((Color)ColorConverter.ConvertFromString("#F5B041"));
             else
+                return Brushes.LightBlue; // Default color
+        }
+
+        private async void ZoomToFolder(FolderNode folder)
+        {
+            ProcessingIndicator.Visibility = Visibility.Visible;
+            ProcessingIndicator.Text = "Processing...";
+            MainCanvas.Opacity = 0.5;
+            await Task.Yield();
+
+            try
             {
-                // If no parent is recorded, try to get the file system parent.
-                DirectoryInfo parentDir = Directory.GetParent(_rootFolder.Path);
-                if (parentDir != null)
+                _rootFolder = folder;
+                RootFolderTextBox.Text = folder.Path;
+                MainCanvas.Children.Clear();
+                double width = MainCanvas.ActualWidth;
+                double height = MainCanvas.ActualHeight;
+                RenderFolderMap(folder, MainCanvas, 0, 0, width, height);
+            }
+            finally
+            {
+                ProcessingIndicator.Visibility = Visibility.Collapsed;
+                MainCanvas.Opacity = 1.0;
+            }
+        }
+
+        private async void ZoomOutButton_Click(object sender, RoutedEventArgs e)
+        {
+            ProcessingIndicator.Visibility = Visibility.Visible;
+            ProcessingIndicator.Text = "Processing...";
+            MainCanvas.Opacity = 0.5;
+            await Task.Yield();
+
+            try
+            {
+                if (_rootFolder != null && _rootFolder.Parent != null)
                 {
-                    FolderNode newRoot = BuildFolderTree(parentDir.FullName);
-                    ZoomToFolder(newRoot);
+                    ZoomToFolder(_rootFolder.Parent);
                 }
                 else
                 {
-                    MessageBox.Show("Already at the drive root.");
+                    DirectoryInfo parentDir = Directory.GetParent(_rootFolder.Path);
+                    if (parentDir != null)
+                    {
+                        FolderNode newRoot = BuildFolderTree(parentDir.FullName);
+                        ZoomToFolder(newRoot);
+                    }
+                    else
+                    {
+                        MessageBox.Show("Already at the drive root.");
+                    }
                 }
+            }
+            finally
+            {
+                ProcessingIndicator.Visibility = Visibility.Collapsed;
+                MainCanvas.Opacity = 1.0;
             }
         }
 
@@ -367,6 +426,16 @@ namespace Spacer
             public List<(string Path, long Size)> Files { get; set; } = new List<(string, long)>();
             public List<FolderNode> SubFolders { get; set; } = new List<FolderNode>();
             public long TotalSize => Files.Sum(f => f.Size) + SubFolders.Sum(f => f.TotalSize);
+        }
+
+        private class ChildItem
+        {
+            public string Path;
+            public double Size;
+            public bool IsFolder;
+            public FolderNode Folder;
+            public Rect Rect;
+            public bool IsRollup;
         }
     }
 }
