@@ -42,12 +42,11 @@ namespace Spacer
             {
                 string selectedPath = System.IO.Path.GetDirectoryName(folderDialog.FileName);
                 RootFolderTextBox.Text = selectedPath;
-                _rootFolder = BuildFolderTree(selectedPath);  // Save the folder tree
+                _rootFolder = BuildFolderTree(selectedPath);  // Build the folder tree
                 MainCanvas.Children.Clear();
                 RenderFolderMap(_rootFolder, MainCanvas, 0, 0, MainCanvas.ActualWidth, MainCanvas.ActualHeight);
             }
         }
-
 
         private FolderNode BuildFolderTree(string path)
         {
@@ -69,6 +68,7 @@ namespace Spacer
                 foreach (var folder in subFolders)
                 {
                     var subNode = BuildFolderTree(folder);
+                    subNode.Parent = node; // assign parent
                     if (subNode.TotalSize > 0) // Ignore empty folders
                     {
                         node.SubFolders.Add(subNode);
@@ -82,10 +82,10 @@ namespace Spacer
 
         private void RenderFolderMap(FolderNode node, Canvas canvas, double x, double y, double width, double height)
         {
-            const double gap = 3;                // Gap between boxes and folder border
-            const double rollupThreshold = 3;      // Minimum size (in pixels) for a box before rollup
-            const double textMinWidth = 40;        // Minimum width to show text
-            const double textMinHeight = 20;       // Minimum height to show text
+            const double gap = 3;           // Gap between boxes and folder border
+            const double rollupThreshold = 3; // Minimum size (in pixels) for a box before rollup
+            const double textMinWidth = 40;   // Minimum width to show text
+            const double textMinHeight = 20;  // Minimum height to show text
 
             if (node == null || width <= 0 || height <= 0)
                 return;
@@ -202,7 +202,7 @@ namespace Spacer
                     Canvas.SetTop(grid, gridY);
                 }
 
-                // Recurse for folders (excluding rollup items).
+                // Attach double-click event and recurse for folder items (excluding rollup items).
                 if (item.IsFolder && !item.IsRollup)
                 {
                     rect.MouseLeftButtonDown += (s, e) =>
@@ -302,19 +302,49 @@ namespace Spacer
 
         private void ZoomToFolder(FolderNode folder)
         {
-            // Clear the canvas and re-render the treemap using the new folder as the root.
+            // Update the current folder.
+            _rootFolder = folder;
+            // Optionally update the UI with the new folder path.
+            RootFolderTextBox.Text = folder.Path;
+            // Clear and re-render the treemap using the new folder as the root.
             MainCanvas.Children.Clear();
             double width = MainCanvas.ActualWidth;
             double height = MainCanvas.ActualHeight;
             RenderFolderMap(folder, MainCanvas, 0, 0, width, height);
-
-            // Optionally update the UI with the new folder path.
-            RootFolderTextBox.Text = folder.Path;
         }
 
-        class FolderNode 
+        private void ZoomOutButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (_rootFolder == null)
+                return;
+
+            // If the current folder already has a Parent, use it.
+            if (_rootFolder.Parent != null)
+            {
+                ZoomToFolder(_rootFolder.Parent);
+            }
+            else
+            {
+                // No Parent in the built tree – try getting the parent from the file system.
+                DirectoryInfo parentDir = Directory.GetParent(_rootFolder.Path);
+                if (parentDir != null)
+                {
+                    // Rebuild the folder tree for the parent's path.
+                    FolderNode newRoot = BuildFolderTree(parentDir.FullName);
+                    ZoomToFolder(newRoot);
+                }
+                else
+                {
+                    MessageBox.Show("Already at the drive root.");
+                }
+            }
+        }
+
+
+        class FolderNode
         {
             public string Path { get; set; }
+            public FolderNode Parent { get; set; }
             public List<(string Path, long Size)> Files { get; set; } = new List<(string, long)>();
             public List<FolderNode> SubFolders { get; set; } = new List<FolderNode>();
             public long TotalSize => Files.Sum(f => f.Size) + SubFolders.Sum(f => f.TotalSize);
