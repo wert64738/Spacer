@@ -1,9 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -15,7 +11,6 @@ namespace Spacer
 {
     public partial class MainWindow : Window
     {
-        // Define file type extension lists.
         private static readonly string[] ImageExtensions = { ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff", ".ico" };
         private static readonly string[] MovieExtensions = { ".mp4", ".avi", ".mkv", ".mov", ".wmv", ".flv", ".webm" };
         private static readonly string[] AudioExtensions = { ".mp3", ".wav", ".aac", ".ogg", ".flac", ".m4a" };
@@ -35,13 +30,11 @@ namespace Spacer
 
         private FolderNode _rootFolder;
 
-        // Allows dragging the window by clicking anywhere.
         private void Window_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
             this.DragMove();
         }
 
-        // Title bar click handler: double-click toggles maximize.
         private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
             if (e.ClickCount == 2)
@@ -52,7 +45,7 @@ namespace Spacer
                     this.WindowState = WindowState.Normal;
             }
         }
-        // Exit button handler.
+        
         private void ExitButton_Click(object sender, RoutedEventArgs e)
         {
             this.Close();
@@ -73,7 +66,6 @@ namespace Spacer
             ProcessingIndicator.Text = "Scanning directories...";
             MainCanvas.Opacity = 0.5;
 
-            // Create a flashing animation.
             DoubleAnimation flashAnimation = new DoubleAnimation(1.0, 0.0, new Duration(TimeSpan.FromSeconds(0.5)))
             {
                 AutoReverse = true,
@@ -147,7 +139,7 @@ namespace Spacer
 
         private void RenderFolderMap(FolderNode node, Canvas canvas, double x, double y, double width, double height)
         {
-            const double gap = 2;           // Gap between boxes.
+            const double gap = 1;
             const double rollupThreshold = 3;
             const double textMinWidth = 40;
             const double textMinHeight = 20;
@@ -189,14 +181,13 @@ namespace Spacer
                 if (item.Rect.Width <= 0 || item.Rect.Height <= 0)
                     continue;
 
-                // Create each rectangle with a slight rounding.
                 var rect = new Rectangle
                 {
                     Width = item.Rect.Width,
                     Height = item.Rect.Height,
                     Stroke = Brushes.DarkGray,
-                    RadiusX = 3,
-                    RadiusY = 3,
+                    RadiusX = 2,
+                    RadiusY = 2,
                     ToolTip = item.IsRollup ? $"Rolled up {item.Size} bytes" : item.Path
                 };
 
@@ -214,59 +205,14 @@ namespace Spacer
                 if (!item.IsFolder && !item.IsRollup)
                 {
                     ContextMenu cm = new ContextMenu();
-
-                    MenuItem miOpen = new MenuItem { Header = "Open" };
-                    miOpen.Click += (s, e) =>
-                    {
-                        try
-                        {
-                            Process.Start(new ProcessStartInfo(item.Path) { UseShellExecute = true });
-                        }
-                        catch (Exception ex)
-                        {
-                            MessageBox.Show("Could not open file: " + ex.Message);
-                        }
-                    };
-
-                    MenuItem miDelete = new MenuItem { Header = "Delete" };
-                    miDelete.Click += async (s, e) =>
-                    {
-                        if (MessageBox.Show($"Are you sure you want to delete '{System.IO.Path.GetFileName(item.Path)}'?",
-                            "Confirm Delete", MessageBoxButton.YesNo) == MessageBoxResult.Yes)
-                        {
-                            try
-                            {
-                                System.IO.File.Delete(item.Path);
-                                _rootFolder = await Task.Run(() => BuildFolderTree(_rootFolder.Path));
-                                MainCanvas.Children.Clear();
-                                RenderFolderMap(_rootFolder, MainCanvas, 0, 0, MainCanvas.ActualWidth, MainCanvas.ActualHeight);
-                            }
-                            catch (Exception ex)
-                            {
-                                MessageBox.Show("Error deleting file: " + ex.Message);
-                            }
-                        }
-                    };
+                    MenuItem miOpen = AddOpenMenuHandler(item);
+                    MenuItem miDelete = AddDeleteMenuHandler(item);
 
                     cm.Items.Add(miOpen);
                     cm.Items.Add(miDelete);
                     rect.ContextMenu = cm;
 
-                    rect.MouseLeftButtonDown += (s, e) =>
-                    {
-                        if (e.ClickCount == 2)
-                        {
-                            try
-                            {
-                                Process.Start(new ProcessStartInfo(item.Path) { UseShellExecute = true });
-                            }
-                            catch (Exception ex)
-                            {
-                                MessageBox.Show("Could not open file: " + ex.Message);
-                            }
-                            e.Handled = true;
-                        }
-                    };
+                    AddMouseLeftClickHandler(item, rect);
                 }
 
                 if (!item.IsFolder && !item.IsRollup && item.Rect.Width >= textMinWidth && item.Rect.Height >= textMinHeight)
@@ -280,29 +226,7 @@ namespace Spacer
                     grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
                     grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-                    TextBlock filenameText = new TextBlock
-                    {
-                        Text = fileName,
-                        FontSize = 6,
-                        TextAlignment = TextAlignment.Center,
-                        TextTrimming = TextTrimming.CharacterEllipsis,
-                        HorizontalAlignment = HorizontalAlignment.Center,
-                        VerticalAlignment = VerticalAlignment.Center,
-                        Width = item.Rect.Width
-                    };
-                    Grid.SetRow(filenameText, 0);
-
-                    TextBlock filesizeText = new TextBlock
-                    {
-                        Text = FormatSize(item.Size),
-                        FontSize = 6,
-                        TextAlignment = TextAlignment.Center,
-                        HorizontalAlignment = HorizontalAlignment.Center,
-                        VerticalAlignment = VerticalAlignment.Center
-                    };
-                    Grid.SetRow(filesizeText, 1);
-
-                    grid.Children.Add(filenameText);
+                    TextBlock filesizeText = AddFileText(item, fileName, grid);
                     grid.Children.Add(filesizeText);
 
                     grid.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
@@ -316,44 +240,140 @@ namespace Spacer
 
                 if (item.IsFolder && !item.IsRollup)
                 {
-                    rect.MouseLeftButtonDown += (s, e) =>
-                    {
-                        if (e.ClickCount == 2)
-                        {
-                            ZoomToFolder(item.Folder);
-                            e.Handled = true;
-                        }
-                    };
+                    AddMouseClickHandler(item, rect);
 
                     string folderName = System.IO.Path.GetFileName(item.Path);
                     if (string.IsNullOrEmpty(folderName))
                         folderName = item.Path;
 
-                    // Folder name with font size 6 and Bold.
-                    TextBlock folderText = new TextBlock
-                    {
-                        Text = folderName,
-                        FontSize = 6,
-                        FontWeight = FontWeights.Bold,
-                        Foreground = Brushes.Black,
-                        Background = Brushes.Transparent,
-                        TextAlignment = TextAlignment.Center,
-                        Width = item.Rect.Width,
-                        HorizontalAlignment = HorizontalAlignment.Center,
-                        VerticalAlignment = VerticalAlignment.Top,
-                        IsHitTestVisible = false
-                    };
+                    TextBlock folderText = GetFolderTextBlock(item, folderName);
                     canvas.Children.Add(folderText);
                     Canvas.SetLeft(folderText, item.Rect.X);
                     Canvas.SetTop(folderText, item.Rect.Y);
 
-                    // Folder content padding set to 6.
                     const double folderContentPadding = 6;
                     RenderFolderMap(item.Folder, canvas,
                         item.Rect.X + gap, item.Rect.Y + gap + folderContentPadding,
                         Math.Max(0, item.Rect.Width - 2 * gap), Math.Max(0, item.Rect.Height - 2 * gap - folderContentPadding));
                 }
             }
+        }
+
+        private MenuItem AddDeleteMenuHandler(ChildItem item)
+        {
+            MenuItem miDelete = new MenuItem { Header = "Delete" };
+            miDelete.Click += async (s, e) =>
+            {
+                if (MessageBox.Show($"Are you sure you want to delete '{System.IO.Path.GetFileName(item.Path)}'?",
+                    "Confirm Delete", MessageBoxButton.YesNo) == MessageBoxResult.Yes)
+                {
+                    try
+                    {
+                        System.IO.File.Delete(item.Path);
+                        _rootFolder = await Task.Run(() => BuildFolderTree(_rootFolder.Path));
+                        MainCanvas.Children.Clear();
+                        RenderFolderMap(_rootFolder, MainCanvas, 0, 0, MainCanvas.ActualWidth, MainCanvas.ActualHeight);
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show("Error deleting file: " + ex.Message);
+                    }
+                }
+            };
+            return miDelete;
+        }
+
+        private static MenuItem AddOpenMenuHandler(ChildItem item)
+        {
+            MenuItem miOpen = new MenuItem { Header = "Open" };
+            miOpen.Click += (s, e) =>
+            {
+                try
+                {
+                    Process.Start(new ProcessStartInfo(item.Path) { UseShellExecute = true });
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("Could not open file: " + ex.Message);
+                }
+            };
+            return miOpen;
+        }
+
+        private static void AddMouseLeftClickHandler(ChildItem item, Rectangle rect)
+        {
+            rect.MouseLeftButtonDown += (s, e) =>
+            {
+                if (e.ClickCount == 2)
+                {
+                    try
+                    {
+                        Process.Start(new ProcessStartInfo(item.Path) { UseShellExecute = true });
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show("Could not open file: " + ex.Message);
+                    }
+                    e.Handled = true;
+                }
+            };
+        }
+
+        private TextBlock AddFileText(ChildItem item, string fileName, Grid grid)
+        {
+            TextBlock filenameText = new TextBlock
+            {
+                Text = fileName,
+                FontSize = 6,
+                TextAlignment = TextAlignment.Center,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                Width = item.Rect.Width
+            };
+            Grid.SetRow(filenameText, 0);
+
+            TextBlock filesizeText = new TextBlock
+            {
+                Text = FormatSize(item.Size),
+                FontSize = 6,
+                TextAlignment = TextAlignment.Center,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            Grid.SetRow(filesizeText, 1);
+
+            grid.Children.Add(filenameText);
+            return filesizeText;
+        }
+
+        private static TextBlock GetFolderTextBlock(ChildItem item, string folderName)
+        {
+            return new TextBlock
+            {
+                Text = folderName,
+                FontSize = 6,
+                FontWeight = FontWeights.Bold,
+                Foreground = Brushes.Black,
+                Background = Brushes.Transparent,
+                TextAlignment = TextAlignment.Center,
+                Width = item.Rect.Width,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Top,
+                IsHitTestVisible = false
+            };
+        }
+
+        private void AddMouseClickHandler(ChildItem item, Rectangle rect)
+        {
+            rect.MouseLeftButtonDown += (s, e) =>
+            {
+                if (e.ClickCount == 2)
+                {
+                    ZoomToFolder(item.Folder);
+                    e.Handled = true;
+                }
+            };
         }
 
         private void DivideDisplayArea(List<ChildItem> items, int start, int count, Rect area, double totalSize, double gap)
@@ -422,7 +442,6 @@ namespace Spacer
             return $"{gb:F1} GB";
         }
 
-        // GetFileTypeColor now varies colors slightly within each category based on extension.
         private Brush GetFileTypeColor(string filePath)
         {
             string ext = System.IO.Path.GetExtension(filePath).ToLowerInvariant();
@@ -459,7 +478,7 @@ namespace Spacer
         private Color VaryColorForExtension(string ext, Color baseColor)
         {
             int hash = ext.GetHashCode();
-            double offset = ((hash % 11) - 5) / 100.0; // variation in range [-0.05, +0.05]
+            double offset = ((hash % 11) - 5) / 100.0;
             double h, s, l;
             ColorToHSL(baseColor, out h, out s, out l);
             l = Math.Max(0, Math.Min(1, l + offset));
