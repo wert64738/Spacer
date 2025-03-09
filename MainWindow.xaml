@@ -6,6 +6,42 @@
         Background="White"
         SizeChanged="Window_SizeChanged"
         MouseLeftButtonDown="Window_MouseLeftButtonDown">
+    <Window.Resources>
+        <!-- Button Style: More rounded with a blue color scheme -->
+        <Style TargetType="Button">
+            <Setter Property="FontFamily" Value="Segoe UI"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Margin" Value="2"/>
+            <Setter Property="Padding" Value="5,2"/>
+            <Setter Property="Background" Value="#FF2D89EF"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderBrush" Value="#FF1B5FA7"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="10">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="LightBlue"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter Property="Background" Value="LightBlue"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
     <Grid Margin="5">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -20,12 +56,12 @@
             </Grid.ColumnDefinitions>
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="2">
                 <TextBox x:Name="RootFolderTextBox" Width="400" Margin="2" IsReadOnly="True"/>
-                <Button Content="Scan Folder" Click="ScanFolderButton_Click" Margin="2" Padding="5,2"/>
-                <Button Content="Zoom Out" Click="ZoomOutButton_Click" Margin="2" Padding="5,2"/>
+                <Button Content="Scan Folder" Click="ScanFolderButton_Click"/>
+                <Button Content="Zoom Out" Click="ZoomOutButton_Click"/>
                 <TextBlock x:Name="ProcessingIndicator" Text="Processing..." 
                            Visibility="Collapsed" Margin="5,0,0,0" VerticalAlignment="Center"/>
             </StackPanel>
-            <!-- Small Exit Button in the right column -->
+            <!-- Small Exit Button snapped to the right -->
             <Button Content="X" Click="ExitButton_Click" Grid.Column="1" Margin="2" Padding="3,1"
                     FontSize="10" Width="25" Height="25"/>
         </Grid>

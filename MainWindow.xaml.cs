@@ -35,7 +35,7 @@ namespace Spacer
 
         private FolderNode _rootFolder;
 
-        // Allow dragging the window by clicking anywhere.
+        // Allows dragging the window by clicking anywhere.
         private void Window_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
             this.DragMove();
@@ -52,7 +52,6 @@ namespace Spacer
                     this.WindowState = WindowState.Normal;
             }
         }
-
         // Exit button handler.
         private void ExitButton_Click(object sender, RoutedEventArgs e)
         {
@@ -148,7 +147,7 @@ namespace Spacer
 
         private void RenderFolderMap(FolderNode node, Canvas canvas, double x, double y, double width, double height)
         {
-            const double gap = 2;
+            const double gap = 2;           // Gap between boxes.
             const double rollupThreshold = 3;
             const double textMinWidth = 40;
             const double textMinHeight = 20;
@@ -190,11 +189,14 @@ namespace Spacer
                 if (item.Rect.Width <= 0 || item.Rect.Height <= 0)
                     continue;
 
+                // Create each rectangle with a slight rounding.
                 var rect = new Rectangle
                 {
                     Width = item.Rect.Width,
                     Height = item.Rect.Height,
                     Stroke = Brushes.DarkGray,
+                    RadiusX = 3,
+                    RadiusY = 3,
                     ToolTip = item.IsRollup ? $"Rolled up {item.Size} bytes" : item.Path
                 };
 
@@ -250,7 +252,6 @@ namespace Spacer
                     cm.Items.Add(miDelete);
                     rect.ContextMenu = cm;
 
-                    // Double-click to open file.
                     rect.MouseLeftButtonDown += (s, e) =>
                     {
                         if (e.ClickCount == 2)
@@ -328,7 +329,7 @@ namespace Spacer
                     if (string.IsNullOrEmpty(folderName))
                         folderName = item.Path;
 
-                    // Folder name with FontSize 6 and Bold.
+                    // Folder name with font size 6 and Bold.
                     TextBlock folderText = new TextBlock
                     {
                         Text = folderName,
@@ -421,7 +422,7 @@ namespace Spacer
             return $"{gb:F1} GB";
         }
 
-        // GetFileTypeColor varies colors slightly within each category based on extension.
+        // GetFileTypeColor now varies colors slightly within each category based on extension.
         private Brush GetFileTypeColor(string filePath)
         {
             string ext = System.IO.Path.GetExtension(filePath).ToLowerInvariant();
@@ -454,10 +455,11 @@ namespace Spacer
             return new SolidColorBrush(VaryColorForExtension(ext, baseColor));
         }
 
+        // Vary the base color's lightness slightly based on the extension string.
         private Color VaryColorForExtension(string ext, Color baseColor)
         {
             int hash = ext.GetHashCode();
-            double offset = ((hash % 11) - 5) / 100.0;
+            double offset = ((hash % 11) - 5) / 100.0; // variation in range [-0.05, +0.05]
             double h, s, l;
             ColorToHSL(baseColor, out h, out s, out l);
             l = Math.Max(0, Math.Min(1, l + offset));
