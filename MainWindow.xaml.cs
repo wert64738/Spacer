@@ -226,7 +226,8 @@ namespace Spacer
                         TextAlignment = TextAlignment.Center,
                         Width = item.Rect.Width,
                         HorizontalAlignment = HorizontalAlignment.Center,
-                        VerticalAlignment = VerticalAlignment.Top
+                        VerticalAlignment = VerticalAlignment.Top,
+                        IsHitTestVisible = false  // Allows mouse events to pass through.
                     };
                     canvas.Children.Add(folderText);
                     Canvas.SetLeft(folderText, item.Rect.X);
