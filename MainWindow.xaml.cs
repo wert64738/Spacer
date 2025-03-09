@@ -329,19 +329,17 @@ namespace Spacer
 
         private SolidColorBrush GetFolderDepthColor(int depth)
         {
-            Color lightGreen = Colors.LightGreen;
-            Color darkGreen = Colors.DarkOliveGreen; // or Colors.Black
+            Color startGreen = Colors.LightGreen;
+            Color endGreen = Colors.DarkOliveGreen;
 
-            // Calculate how much to darken the color based on depth
-            double maxDepth = 10; // Adjust this based on your maximum expected depth
+            double maxDepth = 10;
             double factor = Math.Min(depth / maxDepth, 1.0);
 
-            // Interpolate between light and dark colors
             Color darkerColor = Color.FromArgb(
-                (byte)(255 * (1 - factor)), // Alpha channel can also get darker
-                (byte)(lightGreen.R * (1 - factor) + darkGreen.R * factor),
-                (byte)(lightGreen.G * (1 - factor) + darkGreen.G * factor),
-                (byte)(lightGreen.B * (1 - factor) + darkGreen.B * factor)
+                (byte)(255 * (1 - factor)),
+                (byte)(startGreen.R * (1 - factor) + endGreen.R * factor),
+                (byte)(startGreen.G * (1 - factor) + endGreen.G * factor),
+                (byte)(startGreen.B * (1 - factor) + endGreen.B * factor)
             );
 
             return new SolidColorBrush(darkerColor);
