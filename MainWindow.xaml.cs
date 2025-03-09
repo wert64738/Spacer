@@ -68,10 +68,13 @@ namespace Spacer
                 foreach (var folder in subFolders)
                 {
                     var subNode = BuildFolderTree(folder);
-                    subNode.Parent = node; // assign parent
-                    if (subNode.TotalSize > 0) // Ignore empty folders
+                    if (subNode != null)
                     {
-                        node.SubFolders.Add(subNode);
+                        subNode.Parent = node; // assign parent for zoom-out
+                        if (subNode.TotalSize > 0) // Ignore empty folders
+                        {
+                            node.SubFolders.Add(subNode);
+                        }
                     }
                 }
             }
@@ -82,10 +85,10 @@ namespace Spacer
 
         private void RenderFolderMap(FolderNode node, Canvas canvas, double x, double y, double width, double height)
         {
-            const double gap = 3;           // Gap between boxes and folder border
-            const double rollupThreshold = 3; // Minimum size (in pixels) for a box before rollup
-            const double textMinWidth = 40;   // Minimum width to show text
-            const double textMinHeight = 20;  // Minimum height to show text
+            const double gap = 3;                   // Gap between boxes and folder border
+            const double rollupThreshold = 3;         // Minimum size (in pixels) for a box before rollup
+            const double textMinWidth = 40;           // Minimum width to show text
+            const double textMinHeight = 20;          // Minimum height to show text
 
             if (node == null || width <= 0 || height <= 0)
                 return;
@@ -117,16 +120,11 @@ namespace Spacer
             var tinyItems = items.Where(item => item.Rect.Width < rollupThreshold || item.Rect.Height < rollupThreshold).ToList();
             if (tinyItems.Any())
             {
-                // Aggregate their sizes.
                 double rollupSize = tinyItems.Sum(item => item.Size);
-                // Remove them from the list.
                 items.RemoveAll(item => item.Rect.Width < rollupThreshold || item.Rect.Height < rollupThreshold);
-                // Add an aggregated rollup item.
                 items.Add(new ChildItem { Path = "Rollup", Size = rollupSize, IsFolder = false, IsRollup = true });
-                // Re-sort and recalc total.
                 items.Sort((a, b) => b.Size.CompareTo(a.Size));
                 totalSize = items.Sum(item => item.Size);
-                // Re-run the layout with the updated items list.
                 DivideDisplayArea(items, 0, items.Count, innerArea, totalSize, gap);
             }
 
@@ -158,7 +156,6 @@ namespace Spacer
                 {
                     string fileName = System.IO.Path.GetFileName(item.Path);
 
-                    // Create a Grid with two rows.
                     Grid grid = new Grid
                     {
                         Width = item.Rect.Width,
@@ -192,7 +189,6 @@ namespace Spacer
                     grid.Children.Add(filenameText);
                     grid.Children.Add(filesizeText);
 
-                    // Measure and center the grid inside the file box.
                     grid.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
                     Size gridSize = grid.DesiredSize;
                     double gridX = item.Rect.X + (item.Rect.Width - gridSize.Width) / 2;
@@ -202,9 +198,11 @@ namespace Spacer
                     Canvas.SetTop(grid, gridY);
                 }
 
-                // Attach double-click event and recurse for folder items (excluding rollup items).
+                // For folders (non-rollup), add folder name at the very top with extra padding,
+                // attach a double-click event, and recurse into the folder.
                 if (item.IsFolder && !item.IsRollup)
                 {
+                    // Attach double-click event for zooming in.
                     rect.MouseLeftButtonDown += (s, e) =>
                     {
                         if (e.ClickCount == 2)
@@ -214,12 +212,37 @@ namespace Spacer
                         }
                     };
 
+                    // Add the folder name (flush with the top of the folder box).
+                    string folderName = System.IO.Path.GetFileName(item.Path);
+                    if (string.IsNullOrEmpty(folderName))
+                        folderName = item.Path; // Use full path if filename is empty (e.g., drive root)
+
+                    TextBlock folderText = new TextBlock
+                    {
+                        Text = folderName,
+                        FontSize = 6,
+                        Foreground = Brushes.Black,
+                        Background = Brushes.Transparent,
+                        TextAlignment = TextAlignment.Center,
+                        Width = item.Rect.Width,
+                        HorizontalAlignment = HorizontalAlignment.Center,
+                        VerticalAlignment = VerticalAlignment.Top
+                    };
+                    canvas.Children.Add(folderText);
+                    Canvas.SetLeft(folderText, item.Rect.X);
+                    Canvas.SetTop(folderText, item.Rect.Y); // No extra padding here.
+
+                    // Define padding for content only.
+                    const double folderContentPadding = 5;
+
+                    // Recurse into the folder, pushing the content down by folderContentPadding.
                     RenderFolderMap(item.Folder, canvas,
-                        item.Rect.X + gap, item.Rect.Y + gap,
-                        Math.Max(0, item.Rect.Width - 2 * gap), Math.Max(0, item.Rect.Height - 2 * gap));
+                        item.Rect.X + gap, item.Rect.Y + gap + folderContentPadding,
+                        Math.Max(0, item.Rect.Width - 2 * gap), Math.Max(0, item.Rect.Height - 2 * gap - folderContentPadding));
                 }
             }
         }
+
 
         private void DivideDisplayArea(List<ChildItem> items, int start, int count, Rect area, double totalSize, double gap)
         {
@@ -313,23 +336,19 @@ namespace Spacer
             RenderFolderMap(folder, MainCanvas, 0, 0, width, height);
         }
 
+        // ZoomOutButton_Click handler.
         private void ZoomOutButton_Click(object sender, RoutedEventArgs e)
         {
-            if (_rootFolder == null)
-                return;
-
-            // If the current folder already has a Parent, use it.
-            if (_rootFolder.Parent != null)
+            if (_rootFolder != null && _rootFolder.Parent != null)
             {
                 ZoomToFolder(_rootFolder.Parent);
             }
             else
             {
-                // No Parent in the built tree – try getting the parent from the file system.
+                // If no parent is recorded, try to get the file system parent.
                 DirectoryInfo parentDir = Directory.GetParent(_rootFolder.Path);
                 if (parentDir != null)
                 {
-                    // Rebuild the folder tree for the parent's path.
                     FolderNode newRoot = BuildFolderTree(parentDir.FullName);
                     ZoomToFolder(newRoot);
                 }
@@ -339,7 +358,6 @@ namespace Spacer
                 }
             }
         }
-
 
         class FolderNode
         {
