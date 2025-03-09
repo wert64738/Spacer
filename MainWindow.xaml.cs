@@ -1,4 +1,5 @@
-﻿using System.Diagnostics;
+﻿using System;
+using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
@@ -19,7 +20,8 @@ namespace Spacer
         private static readonly string[] PDFExtensions = { ".pdf" };
         private static readonly string[] CompressedExtensions = { ".zip", ".7z", ".rar", ".tar", ".gz", ".bz2", ".xz", ".iso" };
         private static readonly string[] CodeExtensions = { ".cs", ".cpp", ".c", ".java", ".py", ".js", ".html", ".css", ".php", ".rb", ".go" };
-        private static readonly string[] BinaryExtensions = { ".exe", ".dll", ".bin", ".dat", ".sys" };
+        private static readonly string[] ExecutableExtensions = { ".exe", ".cmd", ".com", ".bat", ".scr" };
+        private static readonly string[] BinaryExtensions = { ".dll", ".bin", ".dat", ".sys" };
         private static readonly string[] DatabaseExtensions = { ".db", ".sql", ".mdb", ".accdb", ".sqlite" };
         private static readonly string[] VectorExtensions = { ".svg", ".eps", ".ai" };
 
@@ -274,9 +276,11 @@ namespace Spacer
                 {
                     ContextMenu cm = new ContextMenu();
                     MenuItem miOpen = AddOpenMenuHandler(item);
+                    MenuItem miOpenFolder = AddOpenFolderMenuHandler(item);
                     MenuItem miDelete = AddDeleteMenuHandler(item);
 
                     cm.Items.Add(miOpen);
+                    cm.Items.Add(miOpenFolder);
                     cm.Items.Add(miDelete);
                     rect.ContextMenu = cm;
 
@@ -369,6 +373,27 @@ namespace Spacer
             return miDelete;
         }
 
+        private static MenuItem AddOpenFolderMenuHandler(ChildItem item)
+        {
+            MenuItem miOpen = new MenuItem { Header = "Open Folder" };
+            miOpen.Click += (s, e) =>
+            {
+                try
+                {
+                    DirectoryInfo parentDir = Directory.GetParent(item.Path);
+                    if (parentDir != null)
+                    {
+                        Process.Start(new ProcessStartInfo(parentDir.ToString()) { UseShellExecute = true });
+                    }
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("Could not open folder: " + ex.Message);
+                }
+            };
+            return miOpen;
+        }
+
         private static MenuItem AddOpenMenuHandler(ChildItem item)
         {
             MenuItem miOpen = new MenuItem { Header = "Open" };
@@ -394,7 +419,14 @@ namespace Spacer
                 {
                     try
                     {
-                        Process.Start(new ProcessStartInfo(item.Path) { UseShellExecute = true });
+                        if (!item.Path.EndsWith(".exe") && !item.Path.EndsWith(".com") && !item.Path.EndsWith(".bat") && !item.Path.EndsWith(".cmd") && !item.Path.EndsWith(".scr"))
+                        {
+                            Process.Start(new ProcessStartInfo(item.Path) { UseShellExecute = true });
+                        }
+                        else
+                        {
+                            MessageBox.Show("Executable file: " + item.Path);
+                        }
                     }
                     catch (Exception ex)
                     {
@@ -550,6 +582,8 @@ namespace Spacer
                 baseColor = Colors.LightSlateGray;
             else if (BinaryExtensions.Contains(ext))
                 baseColor = Colors.PowderBlue;
+            else if (ExecutableExtensions.Contains(ext))
+                baseColor = Colors.DarkRed; 
             else if (DatabaseExtensions.Contains(ext))
                 baseColor = Colors.DarkSeaGreen;
             else if (VectorExtensions.Contains(ext))
