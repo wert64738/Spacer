@@ -1,5 +1,5 @@
 # Spacer
-Spatial visualization of a directory and its contents:
+Color-coded spatial visualization of a directory and its contents:
 
 ![alt text](https://github.com/wert64738/Spacer/blob/main/screenshot.jpg)
 
