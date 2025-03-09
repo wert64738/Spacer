@@ -119,7 +119,7 @@ namespace Spacer
 
         private void RenderFolderMap(FolderNode node, Canvas canvas, double x, double y, double width, double height)
         {
-            const double gap = 3;           // Gap between boxes and folder border
+            const double gap = 1;             // Gap between boxes and folder border
             const double rollupThreshold = 3; // Minimum size (in pixels) for a box before rollup
             const double textMinWidth = 40;   // Minimum width to show text
             const double textMinHeight = 20;  // Minimum height to show text
@@ -351,16 +351,17 @@ namespace Spacer
             string ext = System.IO.Path.GetExtension(filePath).ToLowerInvariant();
 
             if (ImageExtensions.Contains(ext))
-                return new SolidColorBrush((Color)ColorConverter.ConvertFromString("#7FB3D5"));
+                return new SolidColorBrush(Colors.PeachPuff);      // Pastel orange for images
             else if (MovieExtensions.Contains(ext))
-                return new SolidColorBrush((Color)ColorConverter.ConvertFromString("#A569BD"));
+                return new SolidColorBrush(Colors.LemonChiffon);     // Pastel yellow for movies
             else if (TextExtensions.Contains(ext))
-                return new SolidColorBrush((Color)ColorConverter.ConvertFromString("#82E0AA"));
+                return new SolidColorBrush(Colors.Thistle);          // Pastel purple for text files
             else if (BinaryExtensions.Contains(ext))
-                return new SolidColorBrush((Color)ColorConverter.ConvertFromString("#F5B041"));
+                return new SolidColorBrush(Colors.PowderBlue);       // Pastel blue for binary files
             else
-                return Brushes.LightBlue; // Default color
+                return Brushes.LightBlue;                          // Default color
         }
+
 
         private async void ZoomToFolder(FolderNode folder)
         {
