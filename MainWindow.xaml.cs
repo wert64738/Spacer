@@ -18,6 +18,7 @@ namespace Spacer
         private static readonly string[] ImageExtensions = { ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff" };
         private static readonly string[] MovieExtensions = { ".mp4", ".avi", ".mkv", ".mov", ".wmv" };
         private static readonly string[] TextExtensions = { ".txt", ".md", ".log", ".csv", ".xml", ".json" };
+        private static readonly string[] CompressedExtensions = { ".zip", ".7z", ".rar", ".tar", ".gz", ".bz2", ".xz", ".iso" };
         private static readonly string[] BinaryExtensions = { ".exe", ".dll", ".bin", ".dat", ".sys" };
 
         public MainWindow()
@@ -120,10 +121,10 @@ namespace Spacer
 
         private void RenderFolderMap(FolderNode node, Canvas canvas, double x, double y, double width, double height)
         {
-            const double gap = 3;                   // Gap between boxes and folder border
-            const double rollupThreshold = 3;         // Minimum size (in pixels) for a box before rollup
-            const double textMinWidth = 40;           // Minimum width to show text
-            const double textMinHeight = 20;          // Minimum height to show text
+            const double gap = 3;           // Gap between boxes and folder border
+            const double rollupThreshold = 3; // Minimum size (in pixels) for a box before rollup
+            const double textMinWidth = 40;   // Minimum width to show text
+            const double textMinHeight = 20;  // Minimum height to show text
 
             if (node == null || width <= 0 || height <= 0)
                 return;
@@ -178,23 +179,17 @@ namespace Spacer
                 };
 
                 if (item.IsRollup)
-                {
                     rect.Fill = Brushes.Gray;
-                }
                 else if (item.IsFolder)
-                {
                     rect.Fill = Brushes.LightGreen;
-                }
                 else // File items: choose color based on extension.
-                {
                     rect.Fill = GetFileTypeColor(item.Path);
-                }
 
                 canvas.Children.Add(rect);
                 Canvas.SetLeft(rect, item.Rect.X);
                 Canvas.SetTop(rect, item.Rect.Y);
 
-                // If the item is a file (non-folder and non-rollup), attach a right-click menu.
+                // For file items, attach a right-click context menu.
                 if (!item.IsFolder && !item.IsRollup)
                 {
                     ContextMenu cm = new ContextMenu();
@@ -213,7 +208,7 @@ namespace Spacer
                     };
 
                     MenuItem miDelete = new MenuItem { Header = "Delete" };
-                    miDelete.Click += (s, e) =>
+                    miDelete.Click += async (s, e) =>
                     {
                         if (MessageBox.Show($"Are you sure you want to delete '{System.IO.Path.GetFileName(item.Path)}'?",
                             "Confirm Delete", MessageBoxButton.YesNo) == MessageBoxResult.Yes)
@@ -221,6 +216,10 @@ namespace Spacer
                             try
                             {
                                 System.IO.File.Delete(item.Path);
+                                // After deletion, rescan the current folder.
+                                _rootFolder = await Task.Run(() => BuildFolderTree(_rootFolder.Path));
+                                MainCanvas.Children.Clear();
+                                RenderFolderMap(_rootFolder, MainCanvas, 0, 0, MainCanvas.ActualWidth, MainCanvas.ActualHeight);
                             }
                             catch (Exception ex)
                             {
@@ -234,7 +233,7 @@ namespace Spacer
                     rect.ContextMenu = cm;
                 }
 
-                // For file boxes that are big enough, add centered text.
+                // For file items that are big enough, add centered text.
                 if (!item.IsFolder && !item.IsRollup && item.Rect.Width >= textMinWidth && item.Rect.Height >= textMinHeight)
                 {
                     string fileName = System.IO.Path.GetFileName(item.Path);
@@ -281,8 +280,7 @@ namespace Spacer
                     Canvas.SetTop(grid, gridY);
                 }
 
-                // For folders, add folder name at the very top (flush with the top),
-                // enable double-click zoom, and recurse into the folder.
+                // For folders, add folder name at the very top (flush) and enable double-click zoom.
                 if (item.IsFolder && !item.IsRollup)
                 {
                     rect.MouseLeftButtonDown += (s, e) =>
@@ -398,6 +396,8 @@ namespace Spacer
                 return new SolidColorBrush(Colors.LemonChiffon);     // Pastel yellow for movies
             else if (TextExtensions.Contains(ext))
                 return new SolidColorBrush(Colors.Thistle);          // Pastel purple for text files
+            else if (CompressedExtensions.Contains(ext))
+                return new SolidColorBrush(Colors.Yellow);           // Yellow for compressed files
             else if (BinaryExtensions.Contains(ext))
                 return new SolidColorBrush(Colors.PowderBlue);       // Pastel blue for binary files
             else
