@@ -15,11 +15,17 @@ namespace Spacer
     public partial class MainWindow : Window
     {
         // Define file type extension lists.
-        private static readonly string[] ImageExtensions = { ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff" };
-        private static readonly string[] MovieExtensions = { ".mp4", ".avi", ".mkv", ".mov", ".wmv" };
-        private static readonly string[] TextExtensions = { ".txt", ".md", ".log", ".csv", ".xml", ".json" };
+        private static readonly string[] ImageExtensions = { ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff", ".ico" };
+        private static readonly string[] MovieExtensions = { ".mp4", ".avi", ".mkv", ".mov", ".wmv", ".flv", ".webm" };
+        private static readonly string[] AudioExtensions = { ".mp3", ".wav", ".aac", ".ogg", ".flac", ".m4a" };
+        private static readonly string[] TextExtensions = { ".txt", ".md", ".log", ".rtf", ".csv" };
+        private static readonly string[] OfficeExtensions = { ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx" };
+        private static readonly string[] PDFExtensions = { ".pdf" };
         private static readonly string[] CompressedExtensions = { ".zip", ".7z", ".rar", ".tar", ".gz", ".bz2", ".xz", ".iso" };
+        private static readonly string[] CodeExtensions = { ".cs", ".cpp", ".c", ".java", ".py", ".js", ".html", ".css", ".php", ".rb", ".go" };
         private static readonly string[] BinaryExtensions = { ".exe", ".dll", ".bin", ".dat", ".sys" };
+        private static readonly string[] DatabaseExtensions = { ".db", ".sql", ".mdb", ".accdb", ".sqlite" };
+        private static readonly string[] VectorExtensions = { ".svg", ".eps", ".ai" };
 
         public MainWindow()
         {
@@ -39,7 +45,6 @@ namespace Spacer
 
         private async void ScanFolderButton_Click(object sender, RoutedEventArgs e)
         {
-            // Show processing indicator and dim main display.
             ProcessingIndicator.Visibility = Visibility.Visible;
             ProcessingIndicator.Text = "Scanning directories...";
             MainCanvas.Opacity = 0.5;
@@ -68,7 +73,6 @@ namespace Spacer
                     string selectedPath = System.IO.Path.GetDirectoryName(folderDialog.FileName);
                     RootFolderTextBox.Text = selectedPath;
 
-                    // Run the folder scan in a background task.
                     _rootFolder = await Task.Run(() => BuildFolderTree(selectedPath));
 
                     MainCanvas.Children.Clear();
@@ -77,7 +81,6 @@ namespace Spacer
             }
             finally
             {
-                // Stop flashing and restore full opacity.
                 ProcessingIndicator.BeginAnimation(UIElement.OpacityProperty, null);
                 ProcessingIndicator.Visibility = Visibility.Collapsed;
                 MainCanvas.Opacity = 1.0;
@@ -106,7 +109,7 @@ namespace Spacer
                     var subNode = BuildFolderTree(folder);
                     if (subNode != null)
                     {
-                        subNode.Parent = node; // assign parent for zoom-out
+                        subNode.Parent = node;
                         if (subNode.TotalSize > 0) // Ignore empty folders
                         {
                             node.SubFolders.Add(subNode);
@@ -115,21 +118,19 @@ namespace Spacer
                 }
             }
             catch { }
-
             return node;
         }
 
         private void RenderFolderMap(FolderNode node, Canvas canvas, double x, double y, double width, double height)
         {
-            const double gap = 2;           // Reduced gap (padding) between boxes and folder border
-            const double rollupThreshold = 3; // Minimum size (in pixels) for a box before rollup
-            const double textMinWidth = 40;   // Minimum width to show text
-            const double textMinHeight = 20;  // Minimum height to show text
+            const double gap = 2;           // Reduced gap between boxes and folder border
+            const double rollupThreshold = 3;
+            const double textMinWidth = 40;
+            const double textMinHeight = 20;
 
             if (node == null || width <= 0 || height <= 0)
                 return;
 
-            // Build list of child items.
             List<ChildItem> items = new List<ChildItem>();
             foreach (var folder in node.SubFolders)
             {
@@ -142,17 +143,12 @@ namespace Spacer
             if (items.Count == 0)
                 return;
 
-            // Sort items descending by size.
             items.Sort((a, b) => b.Size.CompareTo(a.Size));
             double totalSize = items.Sum(item => item.Size);
 
-            // Reserve a 2-pixel border inside the folder.
             Rect innerArea = new Rect(x + gap, y + gap, Math.Max(0, width - 2 * gap), Math.Max(0, height - 2 * gap));
-
-            // First layout pass.
             DivideDisplayArea(items, 0, items.Count, innerArea, totalSize, gap);
 
-            // Identify tiny items.
             var tinyItems = items.Where(item => item.Rect.Width < rollupThreshold || item.Rect.Height < rollupThreshold).ToList();
             if (tinyItems.Any())
             {
@@ -164,18 +160,16 @@ namespace Spacer
                 DivideDisplayArea(items, 0, items.Count, innerArea, totalSize, gap);
             }
 
-            // Render each item.
             foreach (var item in items)
             {
                 if (item.Rect.Width <= 0 || item.Rect.Height <= 0)
                     continue;
 
-                // Use a less contrasty boundary.
                 var rect = new Rectangle
                 {
                     Width = item.Rect.Width,
                     Height = item.Rect.Height,
-                    Stroke = Brushes.DarkGray,
+                    Stroke = Brushes.DarkGray,  // Less contrasty boundary
                     ToolTip = item.IsRollup ? $"Rolled up {item.Size} bytes" : item.Path
                 };
 
@@ -183,14 +177,13 @@ namespace Spacer
                     rect.Fill = Brushes.Gray;
                 else if (item.IsFolder)
                     rect.Fill = Brushes.LightGreen;
-                else // File items: choose color based on extension.
+                else
                     rect.Fill = GetFileTypeColor(item.Path);
 
                 canvas.Children.Add(rect);
                 Canvas.SetLeft(rect, item.Rect.X);
                 Canvas.SetTop(rect, item.Rect.Y);
 
-                // For file items, attach right-click context menu and double-click to open.
                 if (!item.IsFolder && !item.IsRollup)
                 {
                     ContextMenu cm = new ContextMenu();
@@ -217,7 +210,6 @@ namespace Spacer
                             try
                             {
                                 System.IO.File.Delete(item.Path);
-                                // After deletion, rescan the current folder.
                                 _rootFolder = await Task.Run(() => BuildFolderTree(_rootFolder.Path));
                                 MainCanvas.Children.Clear();
                                 RenderFolderMap(_rootFolder, MainCanvas, 0, 0, MainCanvas.ActualWidth, MainCanvas.ActualHeight);
@@ -233,7 +225,7 @@ namespace Spacer
                     cm.Items.Add(miDelete);
                     rect.ContextMenu = cm;
 
-                    // Double-click to open file.
+                    // Double-click to open the file.
                     rect.MouseLeftButtonDown += (s, e) =>
                     {
                         if (e.ClickCount == 2)
@@ -251,7 +243,6 @@ namespace Spacer
                     };
                 }
 
-                // For file items that are big enough, add centered text.
                 if (!item.IsFolder && !item.IsRollup && item.Rect.Width >= textMinWidth && item.Rect.Height >= textMinHeight)
                 {
                     string fileName = System.IO.Path.GetFileName(item.Path);
@@ -298,9 +289,9 @@ namespace Spacer
                     Canvas.SetTop(grid, gridY);
                 }
 
-                // For folders, add folder name at the very top (flush) and enable double-click zoom.
                 if (item.IsFolder && !item.IsRollup)
                 {
+                    // Enable double-click zoom for folders.
                     rect.MouseLeftButtonDown += (s, e) =>
                     {
                         if (e.ClickCount == 2)
@@ -314,10 +305,11 @@ namespace Spacer
                     if (string.IsNullOrEmpty(folderName))
                         folderName = item.Path;
 
+                    // Render folder name with FontSize 7 and Bold.
                     TextBlock folderText = new TextBlock
                     {
                         Text = folderName,
-                        FontSize = 7, // Increased size for folder name
+                        FontSize = 6,
                         FontWeight = FontWeights.Bold,
                         Foreground = Brushes.Black,
                         Background = Brushes.Transparent,
@@ -331,7 +323,7 @@ namespace Spacer
                     Canvas.SetLeft(folderText, item.Rect.X);
                     Canvas.SetTop(folderText, item.Rect.Y);
 
-                    // Increase top padding for folder content so it doesn't overlap the folder name.
+                    // Increase top padding for folder content (set to 12 pixels) so the folder name has room.
                     const double folderContentPadding = 6;
                     RenderFolderMap(item.Folder, canvas,
                         item.Rect.X + gap, item.Rect.Y + gap + folderContentPadding,
@@ -411,17 +403,29 @@ namespace Spacer
             string ext = System.IO.Path.GetExtension(filePath).ToLowerInvariant();
 
             if (ImageExtensions.Contains(ext))
-                return new SolidColorBrush(Colors.PeachPuff);      // Pastel orange for images
+                return new SolidColorBrush(Colors.Salmon);      // Images
             else if (MovieExtensions.Contains(ext))
-                return new SolidColorBrush(Colors.LemonChiffon);     // Pastel yellow for movies
+                return new SolidColorBrush(Colors.MediumSeaGreen); // Videos
+            else if (AudioExtensions.Contains(ext))
+                return new SolidColorBrush(Colors.MediumOrchid);   // Audio
             else if (TextExtensions.Contains(ext))
-                return new SolidColorBrush(Colors.Thistle);          // Pastel purple for text files
+                return new SolidColorBrush(Colors.LightSkyBlue);   // Text files
+            else if (OfficeExtensions.Contains(ext))
+                return new SolidColorBrush(Colors.PaleGreen);      // Office documents
+            else if (PDFExtensions.Contains(ext))
+                return new SolidColorBrush(Colors.Khaki);          // PDFs
             else if (CompressedExtensions.Contains(ext))
-                return new SolidColorBrush(Colors.Yellow);           // Yellow for compressed files
+                return new SolidColorBrush(Colors.Gold);           // Archives
+            else if (CodeExtensions.Contains(ext))
+                return new SolidColorBrush(Colors.LightSlateGray); // Code files
             else if (BinaryExtensions.Contains(ext))
-                return new SolidColorBrush(Colors.PowderBlue);       // Pastel blue for binary files
+                return new SolidColorBrush(Colors.PowderBlue);     // Executables/Binaries
+            else if (DatabaseExtensions.Contains(ext))
+                return new SolidColorBrush(Colors.DarkSeaGreen);   // Database files
+            else if (VectorExtensions.Contains(ext))
+                return new SolidColorBrush(Colors.LightPink);      // Vector graphics
             else
-                return Brushes.LightBlue;                          // Default color
+                return Brushes.LightBlue;                          // Default
         }
 
         private async void ZoomToFolder(FolderNode folder)
