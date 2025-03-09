@@ -153,33 +153,67 @@ namespace Spacer
                 Canvas.SetLeft(rect, item.Rect.X);
                 Canvas.SetTop(rect, item.Rect.Y);
 
-                // For file boxes that are big enough, add centered text.
+                // For file boxes (non-folders and non-rollup) that are big enough, add centered text.
                 if (!item.IsFolder && !item.IsRollup && item.Rect.Width >= textMinWidth && item.Rect.Height >= textMinHeight)
                 {
                     string fileName = System.IO.Path.GetFileName(item.Path);
-                    string fileSizeStr = FormatSize(item.Size);
-                    TextBlock textBlock = new TextBlock
-                    {
-                        Text = $"{fileName}\n{fileSizeStr}",
-                        FontSize = 10,
-                        Foreground = Brushes.Black,
-                        TextAlignment = TextAlignment.Center,
-                        TextWrapping = TextWrapping.Wrap
-                    };
 
-                    // Measure text size.
-                    textBlock.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-                    Size textSize = textBlock.DesiredSize;
-                    double textX = item.Rect.X + (item.Rect.Width - textSize.Width) / 2;
-                    double textY = item.Rect.Y + (item.Rect.Height - textSize.Height) / 2;
-                    canvas.Children.Add(textBlock);
-                    Canvas.SetLeft(textBlock, textX);
-                    Canvas.SetTop(textBlock, textY);
+                    // Create a Grid with two rows.
+                    Grid grid = new Grid
+                    {
+                        Width = item.Rect.Width,
+                        Height = item.Rect.Height
+                    };
+                    grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+                    grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+                    TextBlock filenameText = new TextBlock
+                    {
+                        Text = fileName,
+                        FontSize = 6,
+                        TextAlignment = TextAlignment.Center,
+                        TextTrimming = TextTrimming.CharacterEllipsis,
+                        HorizontalAlignment = HorizontalAlignment.Center,
+                        VerticalAlignment = VerticalAlignment.Center,
+                        Width = item.Rect.Width
+                    };
+                    Grid.SetRow(filenameText, 0);
+
+                    TextBlock filesizeText = new TextBlock
+                    {
+                        Text = FormatSize(item.Size),
+                        FontSize = 6,
+                        TextAlignment = TextAlignment.Center,
+                        HorizontalAlignment = HorizontalAlignment.Center,
+                        VerticalAlignment = VerticalAlignment.Center
+                    };
+                    Grid.SetRow(filesizeText, 1);
+
+                    grid.Children.Add(filenameText);
+                    grid.Children.Add(filesizeText);
+
+                    // Measure and center the grid inside the file box.
+                    grid.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                    Size gridSize = grid.DesiredSize;
+                    double gridX = item.Rect.X + (item.Rect.Width - gridSize.Width) / 2;
+                    double gridY = item.Rect.Y + (item.Rect.Height - gridSize.Height) / 2;
+                    canvas.Children.Add(grid);
+                    Canvas.SetLeft(grid, gridX);
+                    Canvas.SetTop(grid, gridY);
                 }
 
                 // Recurse for folders (excluding rollup items).
                 if (item.IsFolder && !item.IsRollup)
                 {
+                    rect.MouseLeftButtonDown += (s, e) =>
+                    {
+                        if (e.ClickCount == 2)
+                        {
+                            ZoomToFolder(item.Folder);
+                            e.Handled = true;
+                        }
+                    };
+
                     RenderFolderMap(item.Folder, canvas,
                         item.Rect.X + gap, item.Rect.Y + gap,
                         Math.Max(0, item.Rect.Width - 2 * gap), Math.Max(0, item.Rect.Height - 2 * gap));
@@ -266,6 +300,17 @@ namespace Spacer
             public bool IsRollup; // True if this item represents aggregated tiny items.
         }
 
+        private void ZoomToFolder(FolderNode folder)
+        {
+            // Clear the canvas and re-render the treemap using the new folder as the root.
+            MainCanvas.Children.Clear();
+            double width = MainCanvas.ActualWidth;
+            double height = MainCanvas.ActualHeight;
+            RenderFolderMap(folder, MainCanvas, 0, 0, width, height);
+
+            // Optionally update the UI with the new folder path.
+            RootFolderTextBox.Text = folder.Path;
+        }
 
         class FolderNode 
         {
