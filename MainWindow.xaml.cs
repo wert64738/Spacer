@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -119,10 +120,10 @@ namespace Spacer
 
         private void RenderFolderMap(FolderNode node, Canvas canvas, double x, double y, double width, double height)
         {
-            const double gap = 1;             // Gap between boxes and folder border
-            const double rollupThreshold = 3; // Minimum size (in pixels) for a box before rollup
-            const double textMinWidth = 40;   // Minimum width to show text
-            const double textMinHeight = 20;  // Minimum height to show text
+            const double gap = 3;                   // Gap between boxes and folder border
+            const double rollupThreshold = 3;         // Minimum size (in pixels) for a box before rollup
+            const double textMinWidth = 40;           // Minimum width to show text
+            const double textMinHeight = 20;          // Minimum height to show text
 
             if (node == null || width <= 0 || height <= 0)
                 return;
@@ -193,6 +194,46 @@ namespace Spacer
                 Canvas.SetLeft(rect, item.Rect.X);
                 Canvas.SetTop(rect, item.Rect.Y);
 
+                // If the item is a file (non-folder and non-rollup), attach a right-click menu.
+                if (!item.IsFolder && !item.IsRollup)
+                {
+                    ContextMenu cm = new ContextMenu();
+
+                    MenuItem miOpen = new MenuItem { Header = "Open" };
+                    miOpen.Click += (s, e) =>
+                    {
+                        try
+                        {
+                            Process.Start(new ProcessStartInfo(item.Path) { UseShellExecute = true });
+                        }
+                        catch (Exception ex)
+                        {
+                            MessageBox.Show("Could not open file: " + ex.Message);
+                        }
+                    };
+
+                    MenuItem miDelete = new MenuItem { Header = "Delete" };
+                    miDelete.Click += (s, e) =>
+                    {
+                        if (MessageBox.Show($"Are you sure you want to delete '{System.IO.Path.GetFileName(item.Path)}'?",
+                            "Confirm Delete", MessageBoxButton.YesNo) == MessageBoxResult.Yes)
+                        {
+                            try
+                            {
+                                System.IO.File.Delete(item.Path);
+                            }
+                            catch (Exception ex)
+                            {
+                                MessageBox.Show("Error deleting file: " + ex.Message);
+                            }
+                        }
+                    };
+
+                    cm.Items.Add(miOpen);
+                    cm.Items.Add(miDelete);
+                    rect.ContextMenu = cm;
+                }
+
                 // For file boxes that are big enough, add centered text.
                 if (!item.IsFolder && !item.IsRollup && item.Rect.Width >= textMinWidth && item.Rect.Height >= textMinHeight)
                 {
@@ -240,7 +281,8 @@ namespace Spacer
                     Canvas.SetTop(grid, gridY);
                 }
 
-                // For folders, add folder name at the very top and enable double-click zoom.
+                // For folders, add folder name at the very top (flush with the top),
+                // enable double-click zoom, and recurse into the folder.
                 if (item.IsFolder && !item.IsRollup)
                 {
                     rect.MouseLeftButtonDown += (s, e) =>
@@ -361,7 +403,6 @@ namespace Spacer
             else
                 return Brushes.LightBlue;                          // Default color
         }
-
 
         private async void ZoomToFolder(FolderNode folder)
         {
