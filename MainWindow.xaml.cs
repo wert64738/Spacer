@@ -18,7 +18,7 @@ namespace Spacer
         private static readonly string[] ImageExtensions = { ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff", ".ico" };
         private static readonly string[] MovieExtensions = { ".mp4", ".avi", ".mkv", ".mov", ".wmv", ".flv", ".webm" };
         private static readonly string[] AudioExtensions = { ".mp3", ".wav", ".aac", ".ogg", ".flac", ".m4a" };
-        private static readonly string[] TextExtensions = { ".txt", ".md", ".log", ".rtf", ".csv" };
+        private static readonly string[] TextExtensions = { ".txt", ".md", ".log", ".csv", ".rtf" };
         private static readonly string[] OfficeExtensions = { ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx" };
         private static readonly string[] PDFExtensions = { ".pdf" };
         private static readonly string[] CompressedExtensions = { ".zip", ".7z", ".rar", ".tar", ".gz", ".bz2", ".xz", ".iso" };
@@ -98,7 +98,7 @@ namespace Spacer
                 foreach (var file in files)
                 {
                     var fileInfo = new FileInfo(file);
-                    if (fileInfo.Length >= 100) // Ignore files smaller than 100 bytes
+                    if (fileInfo.Length >= 100)
                     {
                         node.Files.Add((file, fileInfo.Length));
                     }
@@ -110,7 +110,7 @@ namespace Spacer
                     if (subNode != null)
                     {
                         subNode.Parent = node;
-                        if (subNode.TotalSize > 0) // Ignore empty folders
+                        if (subNode.TotalSize > 0)
                         {
                             node.SubFolders.Add(subNode);
                         }
@@ -123,7 +123,7 @@ namespace Spacer
 
         private void RenderFolderMap(FolderNode node, Canvas canvas, double x, double y, double width, double height)
         {
-            const double gap = 2;           // Reduced gap between boxes and folder border
+            const double gap = 2;           // Reduced gap between boxes and folder border.
             const double rollupThreshold = 3;
             const double textMinWidth = 40;
             const double textMinHeight = 20;
@@ -169,7 +169,7 @@ namespace Spacer
                 {
                     Width = item.Rect.Width,
                     Height = item.Rect.Height,
-                    Stroke = Brushes.DarkGray,  // Less contrasty boundary
+                    Stroke = Brushes.DarkGray,
                     ToolTip = item.IsRollup ? $"Rolled up {item.Size} bytes" : item.Path
                 };
 
@@ -225,7 +225,7 @@ namespace Spacer
                     cm.Items.Add(miDelete);
                     rect.ContextMenu = cm;
 
-                    // Double-click to open the file.
+                    // Double-click to open file.
                     rect.MouseLeftButtonDown += (s, e) =>
                     {
                         if (e.ClickCount == 2)
@@ -246,7 +246,6 @@ namespace Spacer
                 if (!item.IsFolder && !item.IsRollup && item.Rect.Width >= textMinWidth && item.Rect.Height >= textMinHeight)
                 {
                     string fileName = System.IO.Path.GetFileName(item.Path);
-
                     Grid grid = new Grid
                     {
                         Width = item.Rect.Width,
@@ -291,7 +290,6 @@ namespace Spacer
 
                 if (item.IsFolder && !item.IsRollup)
                 {
-                    // Enable double-click zoom for folders.
                     rect.MouseLeftButtonDown += (s, e) =>
                     {
                         if (e.ClickCount == 2)
@@ -305,11 +303,10 @@ namespace Spacer
                     if (string.IsNullOrEmpty(folderName))
                         folderName = item.Path;
 
-                    // Render folder name with FontSize 7 and Bold.
                     TextBlock folderText = new TextBlock
                     {
                         Text = folderName,
-                        FontSize = 6,
+                        FontSize = 7,
                         FontWeight = FontWeights.Bold,
                         Foreground = Brushes.Black,
                         Background = Brushes.Transparent,
@@ -323,7 +320,6 @@ namespace Spacer
                     Canvas.SetLeft(folderText, item.Rect.X);
                     Canvas.SetTop(folderText, item.Rect.Y);
 
-                    // Increase top padding for folder content (set to 12 pixels) so the folder name has room.
                     const double folderContentPadding = 6;
                     RenderFolderMap(item.Folder, canvas,
                         item.Rect.X + gap, item.Rect.Y + gap + folderContentPadding,
@@ -398,34 +394,104 @@ namespace Spacer
             return $"{gb:F1} GB";
         }
 
+        // Updated GetFileTypeColor: uses a base color per category and then varies it slightly based on the file extension.
         private Brush GetFileTypeColor(string filePath)
         {
             string ext = System.IO.Path.GetExtension(filePath).ToLowerInvariant();
-
+            Color baseColor;
             if (ImageExtensions.Contains(ext))
-                return new SolidColorBrush(Colors.Salmon);      // Images
+                baseColor = Colors.PeachPuff;      // Base for images
             else if (MovieExtensions.Contains(ext))
-                return new SolidColorBrush(Colors.MediumSeaGreen); // Videos
+                baseColor = Colors.LemonChiffon;     // Base for movies
             else if (AudioExtensions.Contains(ext))
-                return new SolidColorBrush(Colors.MediumOrchid);   // Audio
+                baseColor = Colors.MediumOrchid;     // Base for audio
             else if (TextExtensions.Contains(ext))
-                return new SolidColorBrush(Colors.LightSkyBlue);   // Text files
+                baseColor = Colors.Thistle;          // Base for text files
             else if (OfficeExtensions.Contains(ext))
-                return new SolidColorBrush(Colors.PaleGreen);      // Office documents
+                baseColor = Colors.PaleGreen;        // Base for office docs
             else if (PDFExtensions.Contains(ext))
-                return new SolidColorBrush(Colors.Khaki);          // PDFs
+                baseColor = Colors.Khaki;            // Base for PDFs
             else if (CompressedExtensions.Contains(ext))
-                return new SolidColorBrush(Colors.Gold);           // Archives
+                baseColor = Colors.Gold;             // Base for compressed files
             else if (CodeExtensions.Contains(ext))
-                return new SolidColorBrush(Colors.LightSlateGray); // Code files
+                baseColor = Colors.LightSlateGray;   // Base for code
             else if (BinaryExtensions.Contains(ext))
-                return new SolidColorBrush(Colors.PowderBlue);     // Executables/Binaries
+                baseColor = Colors.PowderBlue;       // Base for binaries
             else if (DatabaseExtensions.Contains(ext))
-                return new SolidColorBrush(Colors.DarkSeaGreen);   // Database files
+                baseColor = Colors.DarkSeaGreen;     // Base for databases
             else if (VectorExtensions.Contains(ext))
-                return new SolidColorBrush(Colors.LightPink);      // Vector graphics
+                baseColor = Colors.LightPink;        // Base for vector graphics
             else
-                return Brushes.LightBlue;                          // Default
+                baseColor = Colors.LightBlue;        // Default
+
+            return new SolidColorBrush(VaryColorForExtension(ext, baseColor));
+        }
+
+        // Vary the base color's lightness slightly based on the extension string.
+        private Color VaryColorForExtension(string ext, Color baseColor)
+        {
+            int hash = ext.GetHashCode();
+            // Compute a variation offset in the range [-0.05, +0.05]
+            double offset = ((hash % 11) - 5) / 100.0;
+            double h, s, l;
+            ColorToHSL(baseColor, out h, out s, out l);
+            l = Math.Max(0, Math.Min(1, l + offset));
+            return ColorFromHSL(h, s, l);
+        }
+
+        // Helper: Convert a Color to HSL.
+        private void ColorToHSL(Color c, out double h, out double s, out double l)
+        {
+            double r = c.R / 255.0;
+            double g = c.G / 255.0;
+            double b = c.B / 255.0;
+            double max = Math.Max(r, Math.Max(g, b));
+            double min = Math.Min(r, Math.Min(g, b));
+            l = (max + min) / 2.0;
+            if (max == min)
+            {
+                h = s = 0;
+            }
+            else
+            {
+                double d = max - min;
+                s = l > 0.5 ? d / (2.0 - max - min) : d / (max + min);
+                if (max == r)
+                    h = (g - b) / d + (g < b ? 6 : 0);
+                else if (max == g)
+                    h = (b - r) / d + 2;
+                else
+                    h = (r - g) / d + 4;
+                h /= 6.0;
+            }
+        }
+
+        private double HueToRGB(double p, double q, double t)
+        {
+            if (t < 0) t += 1;
+            if (t > 1) t -= 1;
+            if (t < 1.0 / 6.0) return p + (q - p) * 6 * t;
+            if (t < 1.0 / 2.0) return q;
+            if (t < 2.0 / 3.0) return p + (q - p) * (2.0 / 3.0 - t) * 6;
+            return p;
+        }
+
+        private Color ColorFromHSL(double h, double s, double l)
+        {
+            double r, g, b;
+            if (s == 0)
+            {
+                r = g = b = l;
+            }
+            else
+            {
+                double q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+                double p = 2 * l - q;
+                r = HueToRGB(p, q, h + 1.0 / 3.0);
+                g = HueToRGB(p, q, h);
+                b = HueToRGB(p, q, h - 1.0 / 3.0);
+            }
+            return Color.FromRgb((byte)Math.Round(r * 255), (byte)Math.Round(g * 255), (byte)Math.Round(b * 255));
         }
 
         private async void ZoomToFolder(FolderNode folder)
