@@ -121,7 +121,7 @@ namespace Spacer
 
         private void RenderFolderMap(FolderNode node, Canvas canvas, double x, double y, double width, double height)
         {
-            const double gap = 3;           // Gap between boxes and folder border
+            const double gap = 2;           // Reduced gap (padding) between boxes and folder border
             const double rollupThreshold = 3; // Minimum size (in pixels) for a box before rollup
             const double textMinWidth = 40;   // Minimum width to show text
             const double textMinHeight = 20;  // Minimum height to show text
@@ -146,7 +146,7 @@ namespace Spacer
             items.Sort((a, b) => b.Size.CompareTo(a.Size));
             double totalSize = items.Sum(item => item.Size);
 
-            // Reserve a 3-pixel border inside the folder.
+            // Reserve a 2-pixel border inside the folder.
             Rect innerArea = new Rect(x + gap, y + gap, Math.Max(0, width - 2 * gap), Math.Max(0, height - 2 * gap));
 
             // First layout pass.
@@ -170,11 +170,12 @@ namespace Spacer
                 if (item.Rect.Width <= 0 || item.Rect.Height <= 0)
                     continue;
 
+                // Use a less contrasty boundary.
                 var rect = new Rectangle
                 {
                     Width = item.Rect.Width,
                     Height = item.Rect.Height,
-                    Stroke = Brushes.Black,
+                    Stroke = Brushes.DarkGray,
                     ToolTip = item.IsRollup ? $"Rolled up {item.Size} bytes" : item.Path
                 };
 
@@ -189,7 +190,7 @@ namespace Spacer
                 Canvas.SetLeft(rect, item.Rect.X);
                 Canvas.SetTop(rect, item.Rect.Y);
 
-                // For file items, attach a right-click context menu.
+                // For file items, attach right-click context menu and double-click to open.
                 if (!item.IsFolder && !item.IsRollup)
                 {
                     ContextMenu cm = new ContextMenu();
@@ -232,7 +233,7 @@ namespace Spacer
                     cm.Items.Add(miDelete);
                     rect.ContextMenu = cm;
 
-                    // Attach a double-click event to open the file.
+                    // Double-click to open file.
                     rect.MouseLeftButtonDown += (s, e) =>
                     {
                         if (e.ClickCount == 2)
@@ -316,7 +317,8 @@ namespace Spacer
                     TextBlock folderText = new TextBlock
                     {
                         Text = folderName,
-                        FontSize = 6,
+                        FontSize = 7, // Increased size for folder name
+                        FontWeight = FontWeights.Bold,
                         Foreground = Brushes.Black,
                         Background = Brushes.Transparent,
                         TextAlignment = TextAlignment.Center,
@@ -329,7 +331,8 @@ namespace Spacer
                     Canvas.SetLeft(folderText, item.Rect.X);
                     Canvas.SetTop(folderText, item.Rect.Y);
 
-                    const double folderContentPadding = 5;
+                    // Increase top padding for folder content so it doesn't overlap the folder name.
+                    const double folderContentPadding = 6;
                     RenderFolderMap(item.Folder, canvas,
                         item.Rect.X + gap, item.Rect.Y + gap + folderContentPadding,
                         Math.Max(0, item.Rect.Width - 2 * gap), Math.Max(0, item.Rect.Height - 2 * gap - folderContentPadding));
